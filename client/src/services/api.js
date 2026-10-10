@@ -1,7 +1,14 @@
 import axios from 'axios';
 
+// In production on Vercel/Netlify, VITE_API_URL points to the live backend server
+// If omitted or in local dev, it falls back to the '/api' proxy
+const rawBase = import.meta.env.VITE_API_URL;
+const baseURL = rawBase
+  ? (rawBase.endsWith('/api') ? rawBase : `${rawBase.replace(/\/$/, '')}/api`)
+  : '/api';
+
 const API = axios.create({
-  baseURL: '/api',
+  baseURL,
   headers: {
     'Content-Type': 'application/json',
   },
