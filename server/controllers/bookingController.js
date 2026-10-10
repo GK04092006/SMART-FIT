@@ -84,6 +84,9 @@ const createBooking = async (req, res) => {
 
       if (adventure) {
         const assessment = user?.fitnessAssessment || {};
+        const hasAssessmentScores =
+          (user?.fitnessScore ?? 0) > 0 &&
+          ((assessment.endurance ?? 0) > 0 || (assessment.strength ?? 0) > 0);
 
         const requiredFitnessScore = adventure.requiredFitnessScore ?? 60;
         const requiredEndurance    = adventure.requiredEndurance    ?? 50;
@@ -93,16 +96,20 @@ const createBooking = async (req, res) => {
         const minimumAge           = adventure.minimumAge           ?? 18;
 
         const userAge          = user?.age ?? null;
-        const userFitnessScore = user?.fitnessScore ?? assessment?.assessmentScore ?? 0;
+        const userFitnessScore = user?.fitnessScore ?? assessment?.assessmentScore ?? 75;
 
-        const checks = {
-          age:            userAge === null || userAge >= minimumAge,
-          overallFitness: userFitnessScore >= requiredFitnessScore,
-          endurance:      (assessment.endurance  ?? 0) >= requiredEndurance,
-          strength:       (assessment.strength   ?? 0) >= requiredStrength,
-          stamina:        (assessment.stamina    ?? 0) >= requiredStamina,
-          flexibility:    (assessment.flexibility ?? 0) >= requiredFlexibility,
-        };
+        const checks = hasAssessmentScores
+          ? {
+              age:            userAge === null || userAge >= minimumAge,
+              overallFitness: userFitnessScore >= requiredFitnessScore,
+              endurance:      (assessment.endurance  ?? 75) >= requiredEndurance,
+              strength:       (assessment.strength   ?? 70) >= requiredStrength,
+              stamina:        (assessment.stamina    ?? 75) >= requiredStamina,
+              flexibility:    (assessment.flexibility ?? 70) >= requiredFlexibility,
+            }
+          : {
+              age: userAge === null || userAge >= minimumAge,
+            };
 
         const weakAreas = Object.entries(checks)
           .filter(([, pass]) => !pass)
@@ -285,6 +292,7 @@ const checkInParticipant = async (req, res) => {
 // @route GET /api/booking/adventure/:adventureId
 const getAdventureBookings = async (req, res) => {
   try {
+    const { adventureId } = req.params;
     const advObjId = mongoose.Types.ObjectId.isValid(adventureId) ? new mongoose.Types.ObjectId(adventureId) : null;
     const refValues = [String(adventureId)];
     if (advObjId) refValues.push(advObjId);
