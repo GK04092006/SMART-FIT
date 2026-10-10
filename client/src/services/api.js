@@ -1,8 +1,10 @@
 import axios from 'axios';
 
-// In production on Vercel/Netlify, VITE_API_URL points to the live backend server
-// If omitted or in local dev, it falls back to the '/api' proxy
-const rawBase = import.meta.env.VITE_API_URL;
+// In production on Vercel/Netlify, VITE_API_URL points to the live Render backend server
+// If omitted in production, it defaults to https://smart-fit-yykj.onrender.com/api
+const rawBase =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD ? 'https://smart-fit-yykj.onrender.com' : '');
 const baseURL = rawBase
   ? (rawBase.endsWith('/api') ? rawBase : `${rawBase.replace(/\/$/, '')}/api`)
   : '/api';
