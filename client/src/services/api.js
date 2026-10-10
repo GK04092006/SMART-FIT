@@ -1,0 +1,45 @@
+import axios from 'axios';
+
+const API = axios.create({
+  baseURL: '/api',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Request interceptor — attach JWT token from localStorage
+API.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response interceptor — auto-logout on 401 (expired/invalid token)
+API.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      const isAuthRoute = error.config?.url?.includes('/auth/login')
+        || error.config?.url?.includes('/auth/register')
+        || error.config?.url?.includes('/auth/google')
+        || error.config?.url?.includes('/auth/phone');
+
+      if (!isAuthRoute) {
+        // Token expired or invalid — clear session and redirect to login
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+          window.location.href = '/login?session=expired';
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default API;

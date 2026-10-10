@@ -1,0 +1,87 @@
+﻿Log ID,User ID,Email,Full Name,Login Status,Login At,IP Address,Note
+MSHCMURJB5Z,seed_alex,alex@fitnessadventure.com,Alex Hunter,SEEDED,"06 Aug 2026, 03:34:22 pm",localhost,Initial database seed
+MSHCMURK9K1,seed_priya,priya@fitnessadventure.com,Priya Sharma,SEEDED,"06 Aug 2026, 03:34:22 pm",localhost,Initial database seed
+MSHCMURMHS7,seed_carlos,carlos@fitnessadventure.com,Carlos Mendes,SEEDED,"06 Aug 2026, 03:34:22 pm",localhost,Initial database seed
+MU5AIXK6YLL,user_1789635090514,24104011@nec.edu.in,24104011,SUCCESS,"17 Sept 2026, 02:21:30 pm",::1,Guest session created
+MUCLSW2DX4K,6ab265cb96bb8f72f3b16024,user@fitnessadventure.com,Rahul Participant,SUCCESS,"22 Sept 2026, 05:11:34 pm",::1,MongoDB login
+MUDNBCBIV4D,,participant@fitnessadventure.com,,FAILED,"23 Sept 2026, 10:41:40 am",::1,Invalid credentials
+MUDNCT3CW3C,6ab265cb96bb8f72f3b1601e,trainer@fitnessadventure.com,Marcus Trainer,SUCCESS,"23 Sept 2026, 10:42:49 am",::1,MongoDB login
+MUDNHI0PNGG,6ab265cb96bb8f72f3b16018,admin@fitnessadventure.com,Chief Administrator,SUCCESS,"23 Sept 2026, 10:46:28 am",::1,MongoDB login
+MUDNLPUA3B7,6ab265cb96bb8f72f3b1601e,trainer@fitnessadventure.com,yoga raj,SUCCESS,"23 Sept 2026, 10:49:44 am",::1,MongoDB login
+MUDNMSX9M3P,,admin@fitnessadventure.com,,FAILED,"23 Sept 2026, 10:50:35 am",::1,Invalid credentials
+MUDNN21B60P,,Paricipant@fitnessadventure.com,,FAILED,"23 Sept 2026, 10:50:47 am",::1,Invalid credentials
+MUDNNB90N5S,,Participant@fitnessadventure.com,,FAILED,"23 Sept 2026, 10:50:59 am",::1,Invalid credentials
+MUDNNC811Y2,,Participant@fitnessadventure.com,,FAILED,"23 Sept 2026, 10:51:00 am",::1,Invalid credentials
+MUDNNF0YYCP,,participant@fitnessadventure.com,,FAILED,"23 Sept 2026, 10:51:04 am",::1,Invalid credentials
+MUKVBQA7RAG,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,,LOGOUT,"28 Sept 2026, 12:00:19 pm",::1,User logged out
+MUKVBXP85JL,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,KARTHIKEYAN S CSE-2024,SUCCESS,"28 Sept 2026, 12:00:28 pm",::1,MongoDB login
+MUKVC2IVNY5,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,,LOGOUT,"28 Sept 2026, 12:00:34 pm",::1,User logged out
+MUKVD6L0UY9,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,KARTHIKEYAN S CSE-2024,SUCCESS,"28 Sept 2026, 12:01:26 pm",::1,MongoDB login
+MUMFI15NL5Z,6abb779ad39116fe19db3df3,damanchouhan9918@gmail.com,,LOGOUT,"29 Sept 2026, 02:12:51 pm",::1,User logged out
+MUMFIRLJA3L,6abb779ad39116fe19db3df3,damanchouhan9918@gmail.com,Devansh  Chouhan,SUCCESS,"29 Sept 2026, 02:13:25 pm",::1,MongoDB login
+MUMFNSAHXYH,6abb779ad39116fe19db3df3,damanchouhan9918@gmail.com,,LOGOUT,"29 Sept 2026, 02:17:20 pm",::1,User logged out
+MUMFR4QJH11,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,KARTHIKEYAN S CSE-2024,SUCCESS,"29 Sept 2026, 02:19:56 pm",::1,MongoDB login
+MUO92W6V7TR,,24104011@nec.edu.in,,FAILED,"30 Sept 2026, 08:48:39 pm",::ffff:127.0.0.1,Invalid credentials
+MUO9IMVIRHT,,24104012@nec.edu.in,,FAILED,"30 Sept 2026, 09:00:54 pm",::ffff:127.0.0.1,Invalid credentials
+MUO9JZ3FGAA,6abd2a8cd883c01d947d607c,24104012@nec.edu.in,karthikeyan,SUCCESS,"30 Sept 2026, 09:01:56 pm",::ffff:127.0.0.1,MongoDB login
+MUO9ZETERIL,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,,LOGOUT,"30 Sept 2026, 09:13:57 pm",::1,User logged out
+MUOA9H3AWS3,6abd2e68d883c01d947d612d,karthik@gmail.com,,LOGOUT,"30 Sept 2026, 09:21:46 pm",::1,User logged out
+MUOA9SMQGBE,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,KARTHIKEYAN S CSE-2024,SUCCESS,"30 Sept 2026, 09:22:01 pm",::1,MongoDB login
+MUOA9SNENUJ,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,,LOGOUT,"30 Sept 2026, 09:22:01 pm",::1,User logged out
+MUS6ISHBIXG,6ab265cb96bb8f72f3b16018,admin@fitnessadventure.com,Chief Administrator,SUCCESS,"03 Oct 2026, 02:48:07 pm",::ffff:127.0.0.1,MongoDB login
+MUSNU4HZ4EI,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,KARTHIKEYAN S CSE-2024,SUCCESS,"03 Oct 2026, 10:52:49 pm",::ffff:127.0.0.1,MongoDB login
+MUTTJI4T54X,,24104011@nec.edu.in,,FAILED,"04 Oct 2026, 06:20:18 pm",::1,Invalid credentials
+MUTTJOTYW56,,24104011@nec.edu.in,,FAILED,"04 Oct 2026, 06:20:26 pm",::1,Invalid credentials
+MUTTJQY8OAO,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,KARTHIKEYAN S CSE-2024,SUCCESS,"04 Oct 2026, 06:20:29 pm",::1,MongoDB login
+MUTZFMHYM50,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,,LOGOUT,"04 Oct 2026, 09:05:14 pm",::1,User logged out
+MUTZG59U54I,,karthike@gmail.com,,FAILED,"04 Oct 2026, 09:05:39 pm",::1,Invalid credentials
+MUTZGVWA6K7,,admin@fitnessadventure.com,,FAILED,"04 Oct 2026, 09:06:13 pm",::1,Invalid credentials
+MUTZRA7JC09,6ab265cb96bb8f72f3b16018,admin@fitnessadventure.com,Chief Administrator,SUCCESS,"04 Oct 2026, 09:14:18 pm",::1,MongoDB login
+MUTZS99JBZZ,,dmin@fitnessadventure.com,,FAILED,"04 Oct 2026, 09:15:04 pm",::1,Invalid credentials
+MUTZSCUMA8P,,dmin@fitnessadventure.com,,FAILED,"04 Oct 2026, 09:15:08 pm",::1,Invalid credentials
+MUTZV8YYC0O,6ab265cb96bb8f72f3b16018,admin@fitnessadventure.com,Chief Administrator,SUCCESS,"04 Oct 2026, 09:17:23 pm",::1,MongoDB login
+MUU0OHX0UX5,6ab265cb96bb8f72f3b16018,admin@fitnessadventure.com,,LOGOUT,"04 Oct 2026, 09:40:08 pm",::1,User logged out
+MUU0OMXIBUT,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,KARTHIKEYAN S CSE-2024,SUCCESS,"04 Oct 2026, 09:40:14 pm",::1,MongoDB login
+MUUVYLO5N78,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,,LOGOUT,"05 Oct 2026, 12:15:47 pm",::1,User logged out
+MUUW73HMR9T,6ac3482565aaf7e8a6bfe2fc,mathan@gmail.com,,LOGOUT,"05 Oct 2026, 12:22:24 pm",::1,User logged out
+MUUW7RWFV05,6ac3482565aaf7e8a6bfe2fc,mathan@gmail.com,Mathan,SUCCESS,"05 Oct 2026, 12:22:55 pm",::1,MongoDB login
+MUV53WWPNHA,6ac3482565aaf7e8a6bfe2fc,mathan@gmail.com,,LOGOUT,"05 Oct 2026, 04:31:52 pm",::1,User logged out
+MUV6OOTB6VI,6ac38df93e18c217f1366076,google.athlete@fitnessadventure.com,Google Athlete,SUCCESS,"05 Oct 2026, 05:16:01 pm",,Google OAuth login
+MUV6Q3F25DC,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,KARTHIKEYAN S CSE-2024,SUCCESS,"05 Oct 2026, 05:17:06 pm",::1,MongoDB login
+MUV6QD2OTQJ,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,,LOGOUT,"05 Oct 2026, 05:17:19 pm",::1,User logged out
+MUV6QEFUL2U,6ac38df93e18c217f1366076,google.athlete@fitnessadventure.com,Google Athlete,SUCCESS,"05 Oct 2026, 05:17:21 pm",::1,Google OAuth login
+MUV6QLO9EAI,6ac38df93e18c217f1366076,google.athlete@fitnessadventure.com,,LOGOUT,"05 Oct 2026, 05:17:30 pm",::1,User logged out
+MUV6QS4DGEK,6ac38df93e18c217f1366076,google.athlete@fitnessadventure.com,Google Athlete,SUCCESS,"05 Oct 2026, 05:17:38 pm",::1,Google OAuth login
+MUWFFYPQO09,6ac38df93e18c217f1366076,google.athlete@fitnessadventure.com,,LOGOUT,"06 Oct 2026, 02:08:56 pm",::1,User logged out
+MUWFG0ORYP7,6ac38df93e18c217f1366076,google.athlete@fitnessadventure.com,Google Athlete,SUCCESS,"06 Oct 2026, 02:08:59 pm",::1,Google OAuth login
+MUWFG50Y24N,6ac38df93e18c217f1366076,google.athlete@fitnessadventure.com,,LOGOUT,"06 Oct 2026, 02:09:05 pm",::1,User logged out
+MUWFGX1OSHD,6ac38df93e18c217f1366076,google.athlete@fitnessadventure.com,Google Athlete,SUCCESS,"06 Oct 2026, 02:09:41 pm",::1,Google OAuth login
+MUWFH2KPICM,6ac38df93e18c217f1366076,google.athlete@fitnessadventure.com,,LOGOUT,"06 Oct 2026, 02:09:48 pm",::1,User logged out
+MUWFHQ9UJ5L,6ac38df93e18c217f1366076,google.athlete@fitnessadventure.com,Google Athlete,SUCCESS,"06 Oct 2026, 02:10:19 pm",::1,Google OAuth login
+MUWGKTA81E3,6ac38df93e18c217f1366076,google.athlete@fitnessadventure.com,,LOGOUT,"06 Oct 2026, 02:40:42 pm",::1,User logged out
+MUWGKUSY97T,6ac4bb14c8a618fc84d127cc,athlete@fitnessadventure.com,Athlete,SUCCESS,"06 Oct 2026, 02:40:44 pm",::1,Google OAuth login
+MUWGKX1S45Q,6ac4bb14c8a618fc84d127cc,athlete@fitnessadventure.com,,LOGOUT,"06 Oct 2026, 02:40:47 pm",::1,User logged out
+MUWGL8VBM9V,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,KARTHIKEYAN S CSE-2024,SUCCESS,"06 Oct 2026, 02:41:02 pm",::1,Google OAuth login
+MUWGLEM9KDJ,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,,LOGOUT,"06 Oct 2026, 02:41:10 pm",::1,User logged out
+MUWGLSP5FQB,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,KARTHIKEYAN S CSE-2024,SUCCESS,"06 Oct 2026, 02:41:28 pm",::1,Google OAuth login
+MUWGPP3XZA2,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,,LOGOUT,"06 Oct 2026, 02:44:30 pm",::1,User logged out
+MUWGSBEAESY,6ac4bc70c8a618fc84d128bf,kartikeyanworkspace@gmail.com,kartikeyan workspace,SUCCESS,"06 Oct 2026, 02:46:32 pm",::1,Google OAuth login
+MUZBXUEPQOZ,6ac7613b7fb36d554bb8a447,24104125@nec.edu.in,RAGHAVAN P CSE-2024,SUCCESS,"08 Oct 2026, 02:54:11 pm",::1,Google OAuth login
+MUZEUK9K7BT,6ac7613b7fb36d554bb8a447,24104125@nec.edu.in,,LOGOUT,"08 Oct 2026, 04:15:36 pm",::1,User logged out
+MUZEV0VSVE8,,admin@fitnessadventure.com,,FAILED,"08 Oct 2026, 04:15:58 pm",::1,Invalid credentials
+MUZEWDBT0LA,,admin@fitnessadventure.com,,FAILED,"08 Oct 2026, 04:17:01 pm",::1,Invalid credentials
+MUZEWEAH8O4,,admin@fitnessadventure.com,,FAILED,"08 Oct 2026, 04:17:02 pm",::1,Invalid credentials
+MUZEWOUWYK1,6ab265cb96bb8f72f3b16018,admin@fitnessadventure.com,Chief Administrator,SUCCESS,"08 Oct 2026, 04:17:16 pm",::1,MongoDB login
+MUZQMLB8ZUO,6ab265cb96bb8f72f3b16018,admin@fitnessadventure.com,,LOGOUT,"08 Oct 2026, 09:45:20 pm",127.0.0.1,User logged out
+MUZQMVRAC44,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,KARTHIKEYAN S CSE-2024,SUCCESS,"08 Oct 2026, 09:45:33 pm",127.0.0.1,Google OAuth login
+MUZR1Z4R07W,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,,LOGOUT,"08 Oct 2026, 09:57:18 pm",127.0.0.1,User logged out
+MUZR3H18L1K,6ab265cb96bb8f72f3b16018,admin@fitnessadventure.com,Chief Administrator,SUCCESS,"08 Oct 2026, 09:58:28 pm",127.0.0.1,MongoDB login
+MUZR4RXEM17,6ab265cb96bb8f72f3b16018,admin@fitnessadventure.com,,LOGOUT,"08 Oct 2026, 09:59:28 pm",127.0.0.1,User logged out
+MUZR5B0KO8G,6ab265cb96bb8f72f3b16018,admin@fitnessadventure.com,Chief Administrator,SUCCESS,"08 Oct 2026, 09:59:53 pm",127.0.0.1,MongoDB login
+MUZRMA6PPFB,6ab265cb96bb8f72f3b16018,admin@fitnessadventure.com,,LOGOUT,"08 Oct 2026, 10:13:05 pm",127.0.0.1,User logged out
+MUZRMR5ILPC,6abd2a8cd883c01d947d607c,24104012@nec.edu.in,karthikeyan,SUCCESS,"08 Oct 2026, 10:13:27 pm",127.0.0.1,MongoDB login
+MUZRMR6GVPB,6abd2a8cd883c01d947d607c,24104012@nec.edu.in,,LOGOUT,"08 Oct 2026, 10:13:27 pm",127.0.0.1,User logged out
+MV12LK2MWUK,6ac7c856fcf580ea768e06b8,24104014@nec.edu.in,,LOGOUT,"09 Oct 2026, 08:08:13 pm",127.0.0.1,User logged out
+MV12M7SBA4S,6ab265cb96bb8f72f3b16018,admin@fitnessadventure.com,Chief Administrator,SUCCESS,"09 Oct 2026, 08:08:44 pm",127.0.0.1,MongoDB login
+MV12NEKGHWV,6ab265cb96bb8f72f3b16018,admin@fitnessadventure.com,,LOGOUT,"09 Oct 2026, 08:09:39 pm",127.0.0.1,User logged out
+MV13E7SQ30L,6aba0974a4bfaec61d72c1ca,24104011@nec.edu.in,KARTHIKEYAN S CSE-2024,SUCCESS,"09 Oct 2026, 08:30:30 pm",127.0.0.1,MongoDB login

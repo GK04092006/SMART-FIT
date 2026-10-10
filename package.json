@@ -1,0 +1,26 @@
+{
+  "name": "fitness-adventure-system",
+  "version": "1.0.0",
+  "description": "Full-stack Fitness and Outdoor Adventure Management System",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm run dev",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "install-all": "npm install && npm install --prefix server && npm install --prefix client"
+  },
+  "keywords": [
+    "fitness",
+    "adventure",
+    "react",
+    "vite",
+    "express",
+    "node"
+  ],
+  "author": "Antigravity",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^10.0.4"
+  }
+}

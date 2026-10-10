@@ -1,0 +1,555 @@
+/* ==========================================================================
+   Summit Fit & Adventure — Dashboard theme
+   Dark glassmorphism UI, orange accent
+   ========================================================================== */
+
+:root {
+  --bg-page: var(--background, #0a0a0c);
+  --bg-panel: var(--surface, #131316);
+  --bg-card: var(--surface, rgba(255, 255, 255, 0.03));
+  --bg-card-hover: var(--bg-card-hover, rgba(255, 255, 255, 0.05));
+  --border-glass: var(--border, rgba(255, 255, 255, 0.08));
+  --border-glass-strong: var(--border-glow, rgba(255, 255, 255, 0.14));
+
+  --accent: var(--primary, #ff5a1f);
+  --accent-dim: rgba(16, 185, 129, 0.14);
+  --accent-text: var(--primary, #ff7a45);
+
+  --text-primary: var(--text, #f4f4f5);
+  --text-secondary: var(--muted-text, #9a9aa2);
+  --text-muted: var(--muted-text, #6a6a72);
+
+  --success: var(--success, #22c55e);
+  --success-dim: rgba(34, 197, 94, 0.14);
+  --info: var(--secondary, #3b82f6);
+  --info-dim: rgba(59, 130, 246, 0.14);
+  --danger: var(--danger, #ef4444);
+
+  --radius-lg: 16px;
+  --radius-md: 10px;
+  --radius-sm: 6px;
+}
+
+.sfa {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-size: 18px;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* ---------- Sidebar ---------- */
+.sfa-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border-glass);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 14px;
+}
+
+.sfa-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 22px;
+}
+
+.sfa-logo-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1a0a04;
+  font-weight: 700;
+}
+
+.sfa-logo-text {
+  line-height: 1.15;
+}
+
+.sfa-logo-text strong {
+  display: block;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+.sfa-logo-text span {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.sfa-nav-group {
+  margin-bottom: 18px;
+}
+
+.sfa-nav-label {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding: 0 10px 8px;
+  text-transform: uppercase;
+}
+
+.sfa-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+}
+
+.sfa-nav-item:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.sfa-nav-item.active {
+  background: var(--accent-dim);
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+.sfa-nav-item .sfa-icon {
+  font-size: 16px;
+  width: 18px;
+  text-align: center;
+}
+
+/* ---------- Main / Topbar ---------- */
+.sfa-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sfa-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 18px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-glass);
+  background: rgba(10, 12, 18, 0.9);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.sfa-topbar-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-primary);
+  min-width: 140px;
+}
+
+.sfa-brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #ff8a5b, #ff5a1f);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.sfa-brand-copy {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.sfa-brand-copy strong {
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sfa-brand-copy span {
+  font-size: 0.56rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.24em;
+}
+
+.sfa-topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.sfa-topbar-link {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.sfa-topbar-link:hover,
+.sfa-topbar-link.active {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.sfa-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+}
+
+.sfa-search {
+  background: var(--bg-card);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  width: 220px;
+}
+
+.sfa-bell {
+  position: relative;
+  color: var(--text-secondary);
+  font-size: 18px;
+}
+
+.sfa-bell .dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.sfa-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  object-fit: cover;
+}
+
+.sfa-content {
+  padding: 28px;
+  overflow-y: auto;
+}
+
+.sfa-page-title {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin: 0 0 4px;
+  text-transform: uppercase;
+}
+
+.sfa-page-sub {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin: 0 0 24px;
+}
+
+/* ---------- Cards ---------- */
+.sfa-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(10px);
+}
+
+.sfa-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.sfa-stat-card {
+  padding: 18px;
+}
+
+.sfa-stat-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.sfa-stat-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+
+.sfa-stat-label {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.sfa-stat-value {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.sfa-stat-note {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.sfa-charts-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.sfa-chart-card {
+  padding: 18px 18px 8px;
+  height: 300px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sfa-chart-title {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.sfa-bottom-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.sfa-panel-title {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  padding: 16px 18px 0;
+}
+
+/* ---------- Buttons ---------- */
+.sfa-btn {
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sfa-btn-accent {
+  background: var(--accent);
+  color: #1a0a04;
+}
+
+.sfa-btn-ghost {
+  background: var(--bg-card);
+  border: 1px solid var(--border-glass);
+  color: var(--text-primary);
+}
+
+.sfa-btn-success {
+  background: #1f9d4f;
+  color: #eafff1;
+}
+
+.sfa-icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px;
+}
+
+.sfa-icon-btn:hover {
+  color: var(--text-primary);
+}
+
+/* ---------- Workout plans ---------- */
+.sfa-plans-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.sfa-plan-card {
+  padding: 18px;
+}
+
+.sfa-plan-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.sfa-plan-name {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.sfa-plan-author {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 2px 0 0;
+}
+
+.sfa-plan-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sfa-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+.sfa-badge-advanced { background: var(--accent-dim); color: var(--accent-text); }
+.sfa-badge-intermediate { background: var(--info-dim); color: #6fa8f5; }
+.sfa-badge-beginner { background: var(--success-dim); color: #4ade80; }
+
+.sfa-plan-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.sfa-plan-stat {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  text-align: center;
+}
+
+.sfa-plan-stat b {
+  display: block;
+  font-size: 15px;
+}
+
+.sfa-plan-stat span {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sfa-plan-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sfa-tag {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.sfa-link {
+  font-size: 12.5px;
+  color: var(--accent-text);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+/* ---------- New plan form ---------- */
+.sfa-form-card {
+  padding: 18px;
+  border-color: var(--accent);
+  margin-bottom: 16px;
+}
+
+.sfa-form-title {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+
+.sfa-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.sfa-field label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.sfa-field input,
+.sfa-field select {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 9px 10px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.sfa-field input:focus,
+.sfa-field select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.sfa-form-actions {
+  display: flex;
+  gap: 10px;
+}
