@@ -109,14 +109,12 @@ const isProduction = () =>
   (process.env.NODE_ENV || 'development').toLowerCase() === 'production';
 
 /**
- * Opt-in fallback: set ALLOW_DB_FALLBACK=true in .env to allow the server
- * to start without a live DB connection (development / demo only).
- *
- * In production this flag is ignored and the process exits on failure.
+ * Opt-in fallback: set ALLOW_DB_FALLBACK=false in .env to force the server
+ * to exit if MongoDB is unreachable. Defaults to true so cloud deployments
+ * stay online in demo/CSV mode even before MONGO_URI is configured.
  */
 const isFallbackAllowed = () =>
-  !isProduction() &&
-  (process.env.ALLOW_DB_FALLBACK || 'true').toLowerCase() === 'true';
+  (process.env.ALLOW_DB_FALLBACK || 'true').toLowerCase() !== 'false';
 
 // ── Main connect function ──────────────────────────────────────────────────────
 
@@ -134,12 +132,8 @@ const connectDB = async () => {
       '[MongoDB] MONGO_URI still contains a placeholder password.\n' +
       '  → Copy server/.env.example to server/.env and set your real Atlas password.\n' +
       '  → Or set MONGO_URI=mongodb://127.0.0.1:27017/fitness_adventure_db for local MongoDB.';
-    if (isProduction()) {
-      console.error(msg);
-      process.exit(1);
-    }
     console.warn(msg);
-    console.warn('[MongoDB] Running in in-memory fallback mode (dev only).');
+    console.warn('[MongoDB] Running in in-memory/CSV fallback mode.');
     isConnected = false;
     return;
   }
@@ -149,7 +143,7 @@ const connectDB = async () => {
   if (usingLocal) {
     console.info(
       '[MongoDB] Connecting to local MongoDB at 127.0.0.1:27017. ' +
-      'To use MongoDB Atlas, set MONGO_URI to your Atlas SRV connection string in server/.env.'
+      'To use MongoDB Atlas, set MONGO_URI to your Atlas SRV connection string.'
     );
   } else {
     console.info('[MongoDB] Connecting to MongoDB Atlas…');
@@ -158,7 +152,7 @@ const connectDB = async () => {
   try {
     const conn = await mongoose.connect(mongoUri, {
       // Atlas needs slightly more time; local is almost instant
-      serverSelectionTimeoutMS: isAtlasUri(mongoUri) ? 10_000 : 6_000,
+      serverSelectionTimeoutMS: isAtlasUri(mongoUri) ? 10_000 : 4_000,
     });
 
     isConnected = true;
@@ -170,24 +164,15 @@ const connectDB = async () => {
     isConnected = false;
     console.error(`[MongoDB] Connection failed: ${error.message}`);
 
-    if (isProduction()) {
-      // Hard fail in production — do NOT silently serve stale in-memory data
-      console.error(
-        '[MongoDB] FATAL: Cannot start server without a database connection in production.\n' +
-        '  → Verify MONGO_URI is correct and that your Atlas cluster allows connections from this IP.'
-      );
-      process.exit(1);
-    }
-
     if (isFallbackAllowed()) {
       console.warn(
-        '[MongoDB] ⚠ Falling back to in-memory mode (ALLOW_DB_FALLBACK=true).\n' +
-        '  Data will NOT be persisted. Set ALLOW_DB_FALLBACK=false to disable this.'
+        '[MongoDB] ⚠ Falling back to in-memory / CSV mode (ALLOW_DB_FALLBACK=true).\n' +
+        '  Set MONGO_URI in your environment variables for persistent cloud storage.'
       );
     } else {
       console.error(
         '[MongoDB] ALLOW_DB_FALLBACK is false and the DB is unreachable.\n' +
-        '  → Set ALLOW_DB_FALLBACK=true in server/.env to allow demo mode, or fix your connection.'
+        '  → Set ALLOW_DB_FALLBACK=true or configure a valid MONGO_URI.'
       );
       process.exit(1);
     }

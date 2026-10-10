@@ -4,7 +4,8 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 
-// Load environment variables
+// Load environment variables (supports running from root or server/ directory)
+dotenv.config({ path: path.join(__dirname, '.env') });
 dotenv.config();
 
 const { connectDB } = require('./config/db');
@@ -50,16 +51,6 @@ if (!fs.existsSync(uploadDir)) {
 // Serve uploaded static files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Root route and health check
-app.get('/', (req, res) => {
-  res.json({
-    status: 'OK',
-    message: 'Fitness & Adventure API is running smoothly',
-    timestamp: new Date(),
-    endpoints: '/api/health, /api/auth, /api/fitness, /api/bmi, /api/adventure, /api/booking, /api/profile, /api/assessment, /api/ai, /api/admin, /api/trainer, /api/guide',
-  });
-});
-
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'OK',
@@ -87,6 +78,30 @@ app.use('/api/communication', communicationRoutes);
 app.use('/api/admin',   adminRoutes);    // admin only
 app.use('/api/trainer', trainerRoutes);  // trainer + admin
 app.use('/api/guide',   guideRoutes);    // guide + admin
+
+// ── Serve Frontend Static Build (if built) ───────────────────
+const clientDistPath = path.join(__dirname, '../client/dist');
+const clientIndexHtml = path.join(clientDistPath, 'index.html');
+
+if (fs.existsSync(clientIndexHtml)) {
+  app.use(express.static(clientDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+      return next();
+    }
+    res.sendFile(clientIndexHtml);
+  });
+} else {
+  // Root route fallback when running API-only
+  app.get('/', (req, res) => {
+    res.json({
+      status: 'OK',
+      message: 'Fitness & Adventure API is running smoothly',
+      timestamp: new Date(),
+      endpoints: '/api/health, /api/auth, /api/fitness, /api/bmi, /api/adventure, /api/booking, /api/profile, /api/assessment, /api/ai, /api/admin, /api/trainer, /api/guide',
+    });
+  });
+}
 
 // Global Process Error Handlers to prevent abrupt crashes
 process.on('uncaughtException', (err) => {
