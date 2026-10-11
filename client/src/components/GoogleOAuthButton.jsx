@@ -47,7 +47,7 @@ const GoogleOAuthButton = ({
   const [customName, setCustomName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [googleReady, setGoogleReady] = useState(false);
-  const gsiBtnRef = useRef(null);
+  const inlineGsiRef = useRef(null);
 
   const presetAccounts = [
     {
@@ -134,27 +134,29 @@ const GoogleOAuthButton = ({
     }
   };
 
-  // Render official GSI button inside modal if script is ready
+  // Render official Google button directly inline using Client ID 272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com
   useEffect(() => {
-    if (!modalOpen || !googleReady || !gsiBtnRef.current || !window.google?.accounts?.id) return;
+    if (!googleReady || !inlineGsiRef.current || !window.google?.accounts?.id) return;
     try {
       window.google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
         callback: handleGoogleGsiCredential,
       });
-      window.google.accounts.id.renderButton(gsiBtnRef.current, {
+      const measuredWidth = inlineGsiRef.current.getBoundingClientRect().width;
+      const btnWidth = Math.min(380, Math.max(240, Math.floor(measuredWidth) || 340));
+      window.google.accounts.id.renderButton(inlineGsiRef.current, {
         type: 'standard',
         theme: 'outline',
         size: 'large',
         text: 'continue_with',
         shape: 'rectangular',
-        width: 320,
+        width: btnWidth,
       });
     } catch (_) {}
     return () => {
-      if (gsiBtnRef.current) gsiBtnRef.current.replaceChildren();
+      if (inlineGsiRef.current) inlineGsiRef.current.replaceChildren();
     };
-  }, [modalOpen, googleReady, role]);
+  }, [googleReady, role]);
 
   const handleSelectAccount = async (account) => {
     onError?.('');
@@ -180,6 +182,52 @@ const GoogleOAuthButton = ({
     }
   };
 
+  // Launch Google OAuth2 TokenClient popup OR open account chooser modal
+  const handleDirectGooglePopup = () => {
+    onError?.('');
+    if (window.google?.accounts?.oauth2) {
+      try {
+        const tokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CLIENT_ID,
+          scope: 'openid email profile',
+          callback: async (tokenResponse) => {
+            if (tokenResponse?.access_token) {
+              setSubmitting(true);
+              try {
+                const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+                });
+                const info = await res.json();
+                if (info?.email) {
+                  await handleSelectAccount({
+                    email: info.email,
+                    name: info.name || info.given_name || info.email.split('@')[0],
+                    picture: info.picture,
+                  });
+                  return;
+                }
+              } catch (_) {
+                // Fallback to account chooser modal
+              } finally {
+                setSubmitting(false);
+              }
+            }
+            setCustomMode(false);
+            setModalOpen(true);
+          },
+          error_callback: () => {
+            setCustomMode(false);
+            setModalOpen(true);
+          },
+        });
+        tokenClient.requestAccessToken({ prompt: 'select_account' });
+        return;
+      } catch (_) {}
+    }
+    setCustomMode(false);
+    setModalOpen(true);
+  };
+
   const handleCustomSubmit = async (e) => {
     e.preventDefault();
     const email = customEmail.trim().toLowerCase();
@@ -196,7 +244,16 @@ const GoogleOAuthButton = ({
   };
 
   return (
-    <>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', width: '100%' }}>
+      {/* Official Google Identity Services Button (Client ID: 272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com) */}
+      {GOOGLE_CONFIGURED && googleReady && (
+        <div
+          ref={inlineGsiRef}
+          style={{ display: 'flex', justifyContent: 'center', width: '100%', minHeight: 44 }}
+        />
+      )}
+
+      {/* Direct OAuth 2.0 Button & Account Chooser (works on any Netlify URL even before Google Console domain whitelisting) */}
       <button
         id="google-login-btn"
         type="button"
@@ -212,31 +269,26 @@ const GoogleOAuthButton = ({
           alignItems: 'center',
           justifyContent: 'center',
           gap: '0.65rem',
-          padding: '0.82rem',
+          padding: '0.78rem',
           borderRadius: '10px',
-          background: '#fff',
-          border: '1.5px solid #e2e8f0',
-          color: '#1e293b',
+          background: GOOGLE_CONFIGURED && googleReady ? 'rgba(255,255,255,0.06)' : '#fff',
+          border: GOOGLE_CONFIGURED && googleReady ? '1px solid rgba(255,255,255,0.14)' : '1.5px solid #e2e8f0',
+          color: GOOGLE_CONFIGURED && googleReady ? '#e2e8f0' : '#1e293b',
           fontWeight: 700,
-          fontSize: '0.95rem',
+          fontSize: '0.88rem',
           cursor: submitting ? 'wait' : 'pointer',
           opacity: submitting ? 0.75 : 1,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
           transition: 'all 0.2s',
         }}
-        onMouseEnter={(e) => {
-          if (!submitting) {
-            e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.2)';
-            e.currentTarget.style.transform = 'translateY(-1px)';
-          }
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)';
-          e.currentTarget.style.transform = 'translateY(0)';
-        }}
       >
-        {submitting ? <Loader2 size={19} className="spin" /> : <GoogleLogo size={20} />}
-        <span>{submitting ? 'Connecting Google OAuth…' : label}</span>
+        {submitting ? <Loader2 size={18} className="spin" /> : <GoogleLogo size={18} />}
+        <span>
+          {submitting
+            ? 'Connecting Google OAuth…'
+            : GOOGLE_CONFIGURED && googleReady
+            ? 'Quick Google Account Picker (MongoDB OAuth)'
+            : label}
+        </span>
       </button>
 
       {modalOpen && (
@@ -314,8 +366,8 @@ const GoogleOAuthButton = ({
                 <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#f8fafc' }}>
                   Sign in with Google
                 </div>
-                <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-                  OAuth 2.0 • Syncs profile to MongoDB ({role.toUpperCase()})
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                  Client ID: {GOOGLE_CLIENT_ID.slice(0, 18)}… • MongoDB Sync
                 </div>
               </div>
             </div>
@@ -387,16 +439,33 @@ const GoogleOAuthButton = ({
                     <User size={18} color="#38bdf8" />
                     <span>Use another Google / Gmail account…</span>
                   </button>
-                </div>
 
-                {GOOGLE_CONFIGURED && googleReady && (
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.85rem', textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: '0.5rem' }}>
-                      Or verify via Google Identity Services popup:
-                    </div>
-                    <div ref={gsiBtnRef} style={{ display: 'flex', justifyContent: 'center', minHeight: 40 }} />
-                  </div>
-                )}
+                  {window.google?.accounts?.oauth2 && (
+                    <button
+                      type="button"
+                      disabled={submitting}
+                      onClick={handleDirectGooglePopup}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.5rem',
+                        padding: '0.65rem',
+                        borderRadius: '10px',
+                        background: '#fff',
+                        border: 'none',
+                        color: '#1e293b',
+                        fontWeight: 700,
+                        fontSize: '0.84rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <GoogleLogo size={16} />
+                      <span>Open Google OAuth Popup Window</span>
+                    </button>
+                  )}
+                </div>
               </>
             ) : (
               <form onSubmit={handleCustomSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', marginTop: '0.75rem' }}>
@@ -509,7 +578,7 @@ const GoogleOAuthButton = ({
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 };
 

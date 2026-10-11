@@ -8,6 +8,18 @@
   ALLOW_DB_FALLBACK = "true"
   VITE_GOOGLE_CLIENT_ID = "272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com"
   GOOGLE_CLIENT_ID = "272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com"
+  MONGO_DB_NAME = "fitness_adventure_db"
+  JWT_SECRET = "fitness_adventure_super_secret_key_2026"
+
+[context.production.environment]
+  VITE_GOOGLE_CLIENT_ID = "272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com"
+  GOOGLE_CLIENT_ID = "272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com"
+  ALLOW_DB_FALLBACK = "true"
+
+[context.deploy-preview.environment]
+  VITE_GOOGLE_CLIENT_ID = "272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com"
+  GOOGLE_CLIENT_ID = "272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com"
+  ALLOW_DB_FALLBACK = "true"
 
 [functions]
   node_bundler = "esbuild"
