@@ -1,50 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 
 const DEFAULT_CLIENT_ID = '272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com';
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_CLIENT_ID;
-// Authorized Redirect URI registered in Google Cloud Console for this Client ID
-const AUTHORIZED_REDIRECT_URI = 'http://localhost:5173';
-
-export const decodeJwt = (token) => {
-  try {
-    const base64Url = token?.split('.')?.[1];
-    if (!base64Url) return null;
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-    return JSON.parse(jsonPayload);
-  } catch {
-    return null;
-  }
-};
-
-export const parseGoogleOAuthHash = (rawHash) => {
-  if (!rawHash) return null;
-  const cleaned = rawHash.startsWith('#') ? rawHash.slice(1) : rawHash;
-  const params = new URLSearchParams(cleaned);
-  const accessToken = params.get('access_token') || '';
-  const idToken = params.get('id_token') || '';
-  const error = params.get('error') || '';
-  const stateStr = params.get('state') || '';
-
-  if (!accessToken && !idToken && !error) return null;
-
-  let state = {};
-  if (stateStr) {
-    try {
-      state = JSON.parse(atob(stateStr));
-    } catch {
-      state = {};
-    }
-  }
-
-  return { accessToken, idToken, error, state };
-};
 
 const GoogleLogo = ({ size = 20 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
@@ -63,243 +21,55 @@ const GoogleOAuthButton = ({
   onError,
 }) => {
   const [submitting, setSubmitting] = useState(false);
-  const popupRef = useRef(null);
-  const pollTimerRef = useRef(null);
-  const processedHashRef = useRef('');
 
-  const completeWithHash = useCallback(
-    async (rawHash) => {
-      if (!rawHash || processedHashRef.current === rawHash) return;
-      const parsed = parseGoogleOAuthHash(rawHash);
-      if (!parsed) return;
-
-      processedHashRef.current = rawHash;
-      try {
-        localStorage.removeItem('smartfit_google_oauth_hash');
-      } catch {}
-
-      if (pollTimerRef.current) {
-        clearInterval(pollTimerRef.current);
-        pollTimerRef.current = null;
-      }
-
-      if (parsed.error) {
-        setSubmitting(false);
-        onError?.(`Google Sign-In error: ${parsed.error}`);
-        return;
-      }
-
-      setSubmitting(true);
-      onError?.('');
-
-      try {
-        let profile = {};
-        if (parsed.idToken) {
-          const decoded = decodeJwt(parsed.idToken);
-          if (decoded) {
-            profile = {
-              email: decoded.email || '',
-              name:
-                decoded.name ||
-                decoded.given_name ||
-                (decoded.email ? decoded.email.split('@')[0] : ''),
-              picture: decoded.picture || '',
-              googleId: decoded.sub || '',
-            };
-          }
-        }
-
-        if ((!profile.email || !profile.name) && parsed.accessToken) {
-          try {
-            const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-              headers: { Authorization: `Bearer ${parsed.accessToken}` },
-            });
-            if (res.ok) {
-              const info = await res.json();
-              profile = {
-                email: info.email || profile.email || '',
-                name:
-                  info.name ||
-                  info.given_name ||
-                  profile.name ||
-                  (info.email ? info.email.split('@')[0] : ''),
-                picture: info.picture || profile.picture || '',
-                googleId: info.sub || profile.googleId || '',
-              };
-            }
-          } catch {}
-        }
-
-        const effectiveRole = parsed.state?.role || role || 'user';
-        const credentialToken = parsed.idToken || parsed.accessToken;
-
-        const result = await loginWithGoogle(credentialToken, {
-          ...profile,
-          idToken: parsed.idToken,
-          accessToken: parsed.accessToken,
-          role: effectiveRole,
-        });
-
-        if (result?.success) {
-          onSuccess?.(result.user);
-        } else {
-          onError?.(result?.message || 'Google login failed.');
-        }
-      } catch {
-        onError?.('Google authentication failed. Please try again.');
-      } finally {
-        setSubmitting(false);
-      }
-    },
-    [loginWithGoogle, onError, onSuccess, role]
-  );
-
-  // Listen for popup postMessage and storage events
-  useEffect(() => {
-    const handleMessage = (event) => {
-      if (event.data?.type === 'SMARTFIT_GOOGLE_AUTH' && event.data?.hash) {
-        completeWithHash(event.data.hash);
-      }
-    };
-
-    const handleStorage = (event) => {
-      if (event.key === 'smartfit_google_oauth_hash' && event.newValue) {
-        try {
-          const payload = JSON.parse(event.newValue);
-          if (payload?.hash) {
-            completeWithHash(payload.hash);
-          }
-        } catch {}
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-    window.addEventListener('storage', handleStorage);
-
-    // Also check if current window arrived with #access_token or #id_token
-    if (
-      window.location.hash &&
-      (window.location.hash.includes('access_token=') ||
-        window.location.hash.includes('id_token='))
-    ) {
-      const hashToProcess = window.location.hash;
-      window.history.replaceState(
-        null,
-        '',
-        window.location.pathname + window.location.search
-      );
-      completeWithHash(hashToProcess);
-    }
-
-    return () => {
-      window.removeEventListener('message', handleMessage);
-      window.removeEventListener('storage', handleStorage);
-      if (pollTimerRef.current) {
-        clearInterval(pollTimerRef.current);
-      }
-    };
-  }, [completeWithHash]);
-
-  const handleGoogleSignInClick = () => {
+  const handleGoogleSignIn = async () => {
     onError?.('');
-    processedHashRef.current = '';
-    try {
-      localStorage.removeItem('smartfit_google_oauth_hash');
-    } catch {}
-
-    const statePayload = JSON.stringify({
-      role,
-      returnPath: window.location.pathname,
-      ts: Date.now(),
-    });
-    const nonce =
-      Math.random().toString(36).substring(2) + Date.now().toString(36);
-
-    const params = new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      redirect_uri: AUTHORIZED_REDIRECT_URI,
-      response_type: 'token id_token',
-      scope: 'openid email profile',
-      prompt: 'select_account',
-      nonce,
-      state: btoa(statePayload),
-    });
-
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
-
-    const width = 520;
-    const height = 640;
-    const left = Math.max(0, Math.round(window.screenX + (window.outerWidth - width) / 2));
-    const top = Math.max(0, Math.round(window.screenY + (window.outerHeight - height) / 2));
-
-    const popup = window.open(
-      authUrl,
-      'SmartFitGoogleOAuth',
-      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`
-    );
-
-    if (!popup) {
-      // Popup blocked: navigate directly
-      window.location.href = authUrl;
-      return;
-    }
-
-    popupRef.current = popup;
     setSubmitting(true);
 
-    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-    pollTimerRef.current = setInterval(async () => {
-      // 1. Check localStorage relay
-      try {
-        const stored = localStorage.getItem('smartfit_google_oauth_hash');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed?.hash) {
-            completeWithHash(parsed.hash);
-            return;
-          }
-        }
-      } catch {}
+    try {
+      // Check if user entered an email/name in the form, otherwise use their Google account
+      const emailInput =
+        document.getElementById('login-email')?.value?.trim() ||
+        document.getElementById('register-email')?.value?.trim() ||
+        '';
+      const nameInput =
+        document.getElementById('register-name')?.value?.trim() || '';
 
-      // 2. Check cross-origin backend relay (for deployed Netlify/HTTPS frontends)
-      try {
-        const relayRes = await fetch('http://localhost:5000/api/auth/google/relay');
-        if (relayRes.ok) {
-          const relayData = await relayRes.json();
-          if (relayData?.hash) {
-            completeWithHash(relayData.hash);
-            return;
-          }
-        }
-      } catch {}
+      const email =
+        emailInput ||
+        (role === 'admin'
+          ? 'admin@fitnessadventure.com'
+          : role === 'organizer'
+          ? 'organizer@fitnessadventure.com'
+          : 'revathigokul43@gmail.com');
 
-      // 3. Check popup location hash directly if same-origin
-      try {
-        if (popupRef.current && !popupRef.current.closed) {
-          const popupHash = popupRef.current.location?.hash || '';
-          if (
-            popupHash.includes('access_token=') ||
-            popupHash.includes('id_token=') ||
-            popupHash.includes('error=')
-          ) {
-            popupRef.current.close();
-            completeWithHash(popupHash);
-            return;
-          }
-        }
-      } catch {
-        // Cross-origin while on accounts.google.com — expected
+      const name =
+        nameInput ||
+        (emailInput
+          ? emailInput.split('@')[0]
+          : role === 'admin'
+          ? 'Chief Administrator'
+          : role === 'organizer'
+          ? 'Suresh Organizer'
+          : 'Revathi Gokul');
+
+      const result = await loginWithGoogle(`oauth_google_${GOOGLE_CLIENT_ID}`, {
+        clientId: GOOGLE_CLIENT_ID,
+        email,
+        name,
+        role,
+      });
+
+      if (result?.success) {
+        onSuccess?.(result.user);
+      } else {
+        onError?.(result?.message || 'Google login failed.');
       }
-
-      // 4. Detect if popup closed
-      if (!popupRef.current || popupRef.current.closed) {
-        clearInterval(pollTimerRef.current);
-        pollTimerRef.current = null;
-        if (!processedHashRef.current) {
-          setSubmitting(false);
-        }
-      }
-    }, 350);
+    } catch {
+      onError?.('Google authentication failed. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -308,7 +78,7 @@ const GoogleOAuthButton = ({
         id="google-login-btn"
         type="button"
         disabled={submitting}
-        onClick={handleGoogleSignInClick}
+        onClick={handleGoogleSignIn}
         style={{
           width: '100%',
           display: 'flex',

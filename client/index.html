@@ -10,40 +10,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;900&display=swap" rel="stylesheet">
-    <script>
-      (function () {
-        var hash = window.location.hash || '';
-        if (hash.indexOf('access_token=') !== -1 || hash.indexOf('id_token=') !== -1 || hash.indexOf('error=') !== -1) {
-          try {
-            localStorage.setItem(
-              'smartfit_google_oauth_hash',
-              JSON.stringify({ hash: hash, ts: Date.now() })
-            );
-          } catch (e) {}
-          try {
-            fetch('http://localhost:5000/api/auth/google/relay', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ hash: hash }),
-              keepalive: true
-            }).finally(function () {
-              if (window.name === 'SmartFitGoogleOAuth' || (window.opener && window.opener !== window)) {
-                try { window.close(); } catch (e) {}
-              }
-            });
-          } catch (e) {}
-          if (window.opener && window.opener !== window) {
-            try {
-              window.opener.postMessage(
-                { type: 'SMARTFIT_GOOGLE_AUTH', hash: hash },
-                '*'
-              );
-              window.close();
-            } catch (e) {}
-          }
-        }
-      })();
-    </script>
   </head>
   <body>
     <div id="root"></div>
