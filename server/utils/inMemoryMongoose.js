@@ -679,17 +679,21 @@ const activateInMemoryMongoose = () => {
 
   mongoose.set('bufferCommands', false);
 
-  const modelsDir = path.join(__dirname, '../models');
-  if (fs.existsSync(modelsDir)) {
-    for (const file of fs.readdirSync(modelsDir)) {
-      if (file.endsWith('.js')) {
-        try {
-          require(path.join(modelsDir, file));
-        } catch (err) {
-          console.warn(`[InMemoryDB] Failed to load model ${file}:`, err.message);
-        }
-      }
-    }
+  // Explicit static requires so Netlify/Vercel serverless bundlers include all models
+  try {
+    require('../models/User');
+    require('../models/Adventure');
+    require('../models/Fitness');
+    require('../models/Booking');
+    require('../models/Exercise');
+    require('../models/Bmi');
+    require('../models/WorkoutLog');
+    require('../models/FitnessAssessment');
+    require('../models/Notification');
+    require('../models/CommunicationLog');
+    require('../models/SosIncident');
+  } catch (err) {
+    console.warn('[InMemoryDB] Static model load warning:', err.message);
   }
 
   for (const [modelName, Model] of Object.entries(mongoose.models)) {

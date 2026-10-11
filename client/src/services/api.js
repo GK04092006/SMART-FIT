@@ -3,43 +3,74 @@ import axios from 'axios';
 const LOCAL_BACKEND_API = 'http://localhost:5000/api';
 const FALLBACK_BACKEND_API = 'https://smart-fit-yykj.onrender.com/api';
 
-// If VITE_API_URL is set, use it; otherwise use relative '/api'
 const rawBase = import.meta.env.VITE_API_URL || '';
-const baseURL = rawBase
+const initialBaseURL = rawBase
   ? (rawBase.endsWith('/api') ? rawBase : `${rawBase.replace(/\/$/, '')}/api`)
   : '/api';
 
 const API = axios.create({
-  baseURL,
+  baseURL: initialBaseURL,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Probe if local backend (connected to mongodb://localhost:27017/) is running on this machine
-// If running, route deployed Netlify/Vercel frontend directly to http://localhost:5000/api so data saves in local MongoDB Compass!
-if (
-  typeof window !== 'undefined' &&
-  window.location.hostname !== 'localhost' &&
-  window.location.hostname !== '127.0.0.1' &&
-  !import.meta.env.VITE_API_URL
-) {
-  fetch(`${LOCAL_BACKEND_API}/health`, { method: 'GET', mode: 'cors' })
-    .then((r) => (r.ok ? r.json() : null))
-    .then((data) => {
-      if (data && data.status === 'OK') {
-        API.defaults.baseURL = LOCAL_BACKEND_API;
-        console.info('[SmartFit API] Connected to local backend (mongodb://localhost:27017/)');
-      }
-    })
-    .catch(() => {
-      // Local backend not running on this device — keep using Netlify Function (/api)
-    });
-}
+let backendResolvePromise = null;
+let resolvedBaseURL = null;
 
-// Request interceptor — attach JWT token from localStorage
+const ensureBackendResolved = async () => {
+  if (resolvedBaseURL) return resolvedBaseURL;
+  if (typeof window === 'undefined') return initialBaseURL;
+
+  // When running directly on localhost:5000, '/api' already hits the local MongoDB backend
+  if (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1'
+  ) {
+    resolvedBaseURL = initialBaseURL;
+    return resolvedBaseURL;
+  }
+
+  if (!backendResolvePromise) {
+    backendResolvePromise = (async () => {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 1500);
+        const res = await fetch(`${LOCAL_BACKEND_API}/health`, {
+          method: 'GET',
+          mode: 'cors',
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.status === 'OK') {
+            resolvedBaseURL = LOCAL_BACKEND_API;
+            API.defaults.baseURL = LOCAL_BACKEND_API;
+            return resolvedBaseURL;
+          }
+        }
+      } catch {
+        // Local MongoDB server not reachable on this device — use cloud backend (/api)
+      }
+      resolvedBaseURL = initialBaseURL;
+      return resolvedBaseURL;
+    })();
+  }
+
+  return backendResolvePromise;
+};
+
+// Trigger initial resolution immediately
+ensureBackendResolved();
+
+// Request interceptor — ensure backend URL is resolved and attach JWT token
 API.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    if (!config._retriedFallback) {
+      const targetBase = await ensureBackendResolved();
+      config.baseURL = targetBase;
+    }
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -49,7 +80,7 @@ API.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor — fallback to Render backend if static-only deployed, and auto-logout on 401
+// Response interceptor — fallback to cloud backend if needed, and auto-logout on 401
 API.interceptors.response.use(
   (response) => {
     if (
@@ -69,8 +100,7 @@ API.interceptors.response.use(
     if (
       config &&
       !config._retriedFallback &&
-      (!error.response || error.response.status === 404 || error.response.status === 502) &&
-      typeof error.response?.data === 'string'
+      (!error.response || error.response.status === 404 || error.response.status === 502)
     ) {
       config._retriedFallback = true;
       config.baseURL = FALLBACK_BACKEND_API;
@@ -78,13 +108,13 @@ API.interceptors.response.use(
     }
 
     if (error.response && error.response.status === 401) {
-      const isAuthRoute = error.config?.url?.includes('/auth/login')
-        || error.config?.url?.includes('/auth/register')
-        || error.config?.url?.includes('/auth/google')
-        || error.config?.url?.includes('/auth/phone');
+      const isAuthRoute =
+        error.config?.url?.includes('/auth/login') ||
+        error.config?.url?.includes('/auth/register') ||
+        error.config?.url?.includes('/auth/google') ||
+        error.config?.url?.includes('/auth/phone');
 
       if (!isAuthRoute) {
-        // Token expired or invalid — clear session and redirect to login
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {

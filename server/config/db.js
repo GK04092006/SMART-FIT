@@ -217,18 +217,36 @@ const isFallbackAllowed = () =>
 const isProduction = () =>
   Boolean(process.env.RENDER) ||
   Boolean(process.env.NETLIFY) ||
-  Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME) ||
-  (process.env.NODE_ENV || 'development').toLowerCase() === 'production';
+  Boolean(process.env.VERCEL) ||
+  Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
 
 const enableInMemoryMode = async () => {
   activateInMemoryMongoose();
-  isConnected = true;
   dbMode = 'in-memory-mongoose';
   await ensureDefaultUsers();
   await ensureDefaultCatalog();
+  isConnected = true;
 };
 
 let mirrorDb = null;
+
+const syncCollectionsToMirror = async (conn) => {
+  if (!mirrorDb || !conn?.connection?.db) return;
+  const collections = await conn.connection.db.listCollections().toArray();
+  for (const { name } of collections) {
+    const docs = await conn.connection.db.collection(name).find({}).toArray();
+    if (docs.length > 0) {
+      const bulkOps = docs.map((doc) => ({
+        replaceOne: {
+          filter: { _id: doc._id },
+          replacement: doc,
+          upsert: true,
+        },
+      }));
+      await mirrorDb.collection(name).bulkWrite(bulkOps, { ordered: false }).catch(() => {});
+    }
+  }
+};
 
 const setupCompassMirror = async (conn) => {
   try {
@@ -240,41 +258,40 @@ const setupCompassMirror = async (conn) => {
 
     mirrorDb = conn.connection.useDb(secondaryName, { useCache: true });
 
-    // Initial one-way sync of all collections from primary to secondary so Compass shows identical data in both
-    const collections = await conn.connection.db.listCollections().toArray();
-    for (const { name } of collections) {
-      const docs = await conn.connection.db.collection(name).find({}).toArray();
-      if (docs.length > 0) {
-        const bulkOps = docs.map((doc) => ({
-          replaceOne: {
-            filter: { _id: doc._id },
-            replacement: doc,
-            upsert: true,
-          },
-        }));
-        await mirrorDb.collection(name).bulkWrite(bulkOps, { ordered: false }).catch(() => {});
+    await syncCollectionsToMirror(conn);
+
+    // Hook into all compiled models so every create/save/update mirrors to both Compass databases immediately
+    for (const Model of Object.values(mongoose.models)) {
+      if (Model._compassMirrorHooked) continue;
+      Model._compassMirrorHooked = true;
+      const colName = Model.collection?.name;
+      if (!colName) continue;
+
+      const origCreate = Model.create.bind(Model);
+      Model.create = async function (...args) {
+        const res = await origCreate(...args);
+        const docs = Array.isArray(res) ? res : [res];
+        for (const d of docs) {
+          if (d && mirrorDb) {
+            const raw = d.toObject ? d.toObject() : d;
+            mirrorDb.collection(colName).replaceOne({ _id: raw._id }, raw, { upsert: true }).catch(() => {});
+          }
+        }
+        return res;
+      };
+
+      if (Model.prototype?.save) {
+        const origSave = Model.prototype.save;
+        Model.prototype.save = async function (...args) {
+          const res = await origSave.apply(this, args);
+          if (res && mirrorDb) {
+            const raw = res.toObject ? res.toObject() : res;
+            mirrorDb.collection(colName).replaceOne({ _id: raw._id }, raw, { upsert: true }).catch(() => {});
+          }
+          return res;
+        };
       }
     }
-
-    // Attach global Mongoose plugin so any new/updated User, Booking, Workout, etc. writes to both Compass DBs
-    mongoose.plugin((schema) => {
-      schema.post('save', function (doc) {
-        if (!mirrorDb || !doc || !this.collection?.name) return;
-        const raw = doc.toObject ? doc.toObject() : doc;
-        mirrorDb
-          .collection(this.collection.name)
-          .replaceOne({ _id: raw._id }, raw, { upsert: true })
-          .catch(() => {});
-      });
-      schema.post('findOneAndUpdate', function (doc) {
-        if (!mirrorDb || !doc || !this.mongooseCollection?.name) return;
-        const raw = doc.toObject ? doc.toObject() : doc;
-        mirrorDb
-          .collection(this.mongooseCollection.name)
-          .replaceOne({ _id: raw._id }, raw, { upsert: true })
-          .catch(() => {});
-      });
-    });
   } catch (err) {
     console.warn('[MongoDB Mirror] Optional sync skipped:', err.message);
   }

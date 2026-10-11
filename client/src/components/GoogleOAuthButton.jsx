@@ -53,7 +53,7 @@ const GoogleOAuthButton = ({
           ? 'Suresh Organizer'
           : 'Revathi Gokul');
 
-      const result = await loginWithGoogle(`oauth_google_${GOOGLE_CLIENT_ID}`, {
+      const result = await loginWithGoogle('demo_google_credential', {
         clientId: GOOGLE_CLIENT_ID,
         email,
         name,
