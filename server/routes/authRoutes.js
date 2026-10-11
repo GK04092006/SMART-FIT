@@ -11,6 +11,26 @@ const {
 } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
 
+// ── Cross-origin Google OAuth popup relay (bridges http://localhost:5173 callback to deployed HTTPS frontend) ──
+let pendingGoogleOAuthRelay = null;
+
+router.post('/google/relay', (req, res) => {
+  const { hash } = req.body || {};
+  if (hash) {
+    pendingGoogleOAuthRelay = { hash, ts: Date.now() };
+  }
+  res.json({ ok: true });
+});
+
+router.get('/google/relay', (req, res) => {
+  if (pendingGoogleOAuthRelay && Date.now() - pendingGoogleOAuthRelay.ts < 60000) {
+    const payload = pendingGoogleOAuthRelay;
+    pendingGoogleOAuthRelay = null;
+    return res.json(payload);
+  }
+  res.json({ hash: null });
+});
+
 // ── Public routes ──────────────────────────────────────────────
 router.post('/register',           registerUser);
 router.post('/login',              loginUser);

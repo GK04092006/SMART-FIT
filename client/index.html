@@ -20,6 +20,18 @@
               JSON.stringify({ hash: hash, ts: Date.now() })
             );
           } catch (e) {}
+          try {
+            fetch('http://localhost:5000/api/auth/google/relay', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ hash: hash }),
+              keepalive: true
+            }).finally(function () {
+              if (window.name === 'SmartFitGoogleOAuth' || (window.opener && window.opener !== window)) {
+                try { window.close(); } catch (e) {}
+              }
+            });
+          } catch (e) {}
           if (window.opener && window.opener !== window) {
             try {
               window.opener.postMessage(

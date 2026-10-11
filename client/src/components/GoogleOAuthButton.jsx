@@ -248,7 +248,7 @@ const GoogleOAuthButton = ({
     setSubmitting(true);
 
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-    pollTimerRef.current = setInterval(() => {
+    pollTimerRef.current = setInterval(async () => {
       // 1. Check localStorage relay
       try {
         const stored = localStorage.getItem('smartfit_google_oauth_hash');
@@ -261,7 +261,19 @@ const GoogleOAuthButton = ({
         }
       } catch {}
 
-      // 2. Check popup location hash directly if same-origin
+      // 2. Check cross-origin backend relay (for deployed Netlify/HTTPS frontends)
+      try {
+        const relayRes = await fetch('http://localhost:5000/api/auth/google/relay');
+        if (relayRes.ok) {
+          const relayData = await relayRes.json();
+          if (relayData?.hash) {
+            completeWithHash(relayData.hash);
+            return;
+          }
+        }
+      } catch {}
+
+      // 3. Check popup location hash directly if same-origin
       try {
         if (popupRef.current && !popupRef.current.closed) {
           const popupHash = popupRef.current.location?.hash || '';
@@ -279,7 +291,7 @@ const GoogleOAuthButton = ({
         // Cross-origin while on accounts.google.com — expected
       }
 
-      // 3. Detect if user closed the popup manually
+      // 4. Detect if popup closed
       if (!popupRef.current || popupRef.current.closed) {
         clearInterval(pollTimerRef.current);
         pollTimerRef.current = null;
@@ -287,7 +299,7 @@ const GoogleOAuthButton = ({
           setSubmitting(false);
         }
       }
-    }, 250);
+    }, 350);
   };
 
   return (
