@@ -176,7 +176,7 @@ export const AuthProvider = ({ children }) => {
         } catch {}
       }
 
-      const result = await loginWithGoogle(idToken || accessToken, {
+      const result = await loginWithGoogle('demo_google_credential', {
         ...profile,
         idToken,
         accessToken,

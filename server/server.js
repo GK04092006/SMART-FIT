@@ -165,12 +165,63 @@ app.use(notFound);
 app.use(errorHandler);
 
 if (require.main === module) {
+  const http = require('http');
   const PORT = process.env.PORT || 5000;
 
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`[Fitness & Adventure Server] Running on http://localhost:${PORT}`);
     console.log(`[Roles] admin → /api/admin | trainer → /api/trainer | guide → /api/guide`);
   });
+
+  // Dedicated Google OAuth 2.0 Callback Relay (receives Google's redirect_uri=http://localhost:5173,
+  // forwards the OAuth token to http://localhost:5000/api/auth/google/relay, and immediately closes the popup)
+  if (Number(PORT) !== 5173) {
+    const oauthCallbackRelay = http.createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(`<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Completing Google Sign-In…</title></head>
+<body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f8fafc;color:#334155;">
+  <p>Completing Google Sign-In…</p>
+  <script>
+    (function () {
+      var hash = window.location.hash || '';
+      var targetOrigin = 'http://localhost:${PORT}';
+      var targetPath = '/login';
+      try {
+        var params = new URLSearchParams(hash.replace(/^#/, ''));
+        var stateStr = params.get('state');
+        if (stateStr) {
+          var st = JSON.parse(atob(stateStr));
+          if (st && st.origin) targetOrigin = st.origin;
+          if (st && st.returnPath) targetPath = st.returnPath;
+        }
+      } catch (e) {}
+
+      if (hash) {
+        fetch('http://localhost:${PORT}/api/auth/google/relay', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hash: hash }),
+          keepalive: true
+        }).finally(function () {
+          try { window.close(); } catch (e) {}
+          setTimeout(function () {
+            window.location.replace(targetOrigin + targetPath + hash);
+          }, 250);
+        });
+      } else {
+        window.location.replace(targetOrigin);
+      }
+    })();
+  </script>
+</body>
+</html>`);
+    });
+
+    oauthCallbackRelay.on('error', () => {});
+    oauthCallbackRelay.listen(5173, '0.0.0.0');
+  }
 
   const gracefulShutdown = () => {
     server.close(() => {
