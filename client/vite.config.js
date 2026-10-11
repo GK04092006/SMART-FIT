@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-const backendUrl = process.env.VITE_API_URL || 'http://127.0.0.1:5000';
+const backendUrl = process.env.VITE_API_URL || 'https://smart-fit-yykj.onrender.com';
 const googleClientId =
   process.env.VITE_GOOGLE_CLIENT_ID ||
   process.env.GOOGLE_CLIENT_ID ||

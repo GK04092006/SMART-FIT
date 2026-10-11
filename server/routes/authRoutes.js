@@ -10,25 +10,30 @@ const {
   logoutUser,
 } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
+const User = require('../models/User');
+const { getDBStatus } = require('../config/db');
 
-// ── Cross-origin Google OAuth popup relay (bridges http://localhost:5173 callback to deployed HTTPS frontend) ──
-let pendingGoogleOAuthRelay = null;
-
-router.post('/google/relay', (req, res) => {
-  const { hash } = req.body || {};
-  if (hash) {
-    pendingGoogleOAuthRelay = { hash, ts: Date.now() };
+// ── Return available Google accounts from external MongoDB Atlas store ──
+router.get('/google/accounts', async (req, res) => {
+  try {
+    if (getDBStatus()) {
+      const users = await User.find({})
+        .select('name email avatar role authProvider')
+        .sort({ updatedAt: -1 })
+        .limit(15);
+      const accounts = users
+        .filter((u) => u?.email && !u.email.endsWith('@fitnessadventure.com') && !u.email.endsWith('@phone.local'))
+        .map((u) => ({
+          email: u.email,
+          name: u.name || u.email.split('@')[0],
+          picture: u.avatar || '',
+        }));
+      return res.json({ accounts });
+    }
+    res.json({ accounts: [] });
+  } catch {
+    res.json({ accounts: [] });
   }
-  res.json({ ok: true });
-});
-
-router.get('/google/relay', (req, res) => {
-  if (pendingGoogleOAuthRelay && Date.now() - pendingGoogleOAuthRelay.ts < 60000) {
-    const payload = pendingGoogleOAuthRelay;
-    pendingGoogleOAuthRelay = null;
-    return res.json(payload);
-  }
-  res.json({ hash: null });
 });
 
 // ── Public routes ──────────────────────────────────────────────

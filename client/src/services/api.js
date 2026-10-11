@@ -1,6 +1,5 @@
 import axios from 'axios';
 
-const LOCAL_BACKEND_API = 'http://localhost:5000/api';
 const FALLBACK_BACKEND_API = 'https://smart-fit-yykj.onrender.com/api';
 
 const rawBase = import.meta.env.VITE_API_URL || '';
@@ -15,62 +14,9 @@ const API = axios.create({
   },
 });
 
-let backendResolvePromise = null;
-let resolvedBaseURL = null;
-
-const ensureBackendResolved = async () => {
-  if (resolvedBaseURL) return resolvedBaseURL;
-  if (typeof window === 'undefined') return initialBaseURL;
-
-  // When running directly on localhost:5000, '/api' already hits the local MongoDB backend
-  if (
-    window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1'
-  ) {
-    resolvedBaseURL = initialBaseURL;
-    return resolvedBaseURL;
-  }
-
-  if (!backendResolvePromise) {
-    backendResolvePromise = (async () => {
-      try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 1500);
-        const res = await fetch(`${LOCAL_BACKEND_API}/health`, {
-          method: 'GET',
-          mode: 'cors',
-          signal: controller.signal,
-        });
-        clearTimeout(timer);
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.status === 'OK') {
-            resolvedBaseURL = LOCAL_BACKEND_API;
-            API.defaults.baseURL = LOCAL_BACKEND_API;
-            return resolvedBaseURL;
-          }
-        }
-      } catch {
-        // Local MongoDB server not reachable on this device — use cloud backend (/api)
-      }
-      resolvedBaseURL = initialBaseURL;
-      return resolvedBaseURL;
-    })();
-  }
-
-  return backendResolvePromise;
-};
-
-// Trigger initial resolution immediately
-ensureBackendResolved();
-
-// Request interceptor — ensure backend URL is resolved and attach JWT token
+// Request interceptor — attach JWT token
 API.interceptors.request.use(
-  async (config) => {
-    if (!config._retriedFallback) {
-      const targetBase = await ensureBackendResolved();
-      config.baseURL = targetBase;
-    }
+  (config) => {
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -80,7 +26,7 @@ API.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor — fallback to cloud backend if needed, and auto-logout on 401
+// Response interceptor — fallback to external cloud backend if needed, and auto-logout on 401
 API.interceptors.response.use(
   (response) => {
     if (

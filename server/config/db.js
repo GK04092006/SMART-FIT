@@ -302,13 +302,14 @@ const setupCompassMirror = async (conn) => {
   }
 };
 
+const DEFAULT_ATLAS_URI =
+  'mongodb+srv://24104011_db_user:karthik%40123@cluster0.62gkyix.mongodb.net/fitness_adventure_admin?retryWrites=true&w=majority&appName=Cluster0';
+
 const _performConnect = async () => {
   const mongoUri =
     process.env.MONGO_URI ||
     process.env.MONGODB_URI ||
-    'mongodb://localhost:27017/fitness_adventure_db';
-  const localMongoUri =
-    process.env.LOCAL_MONGO_URI || 'mongodb://localhost:27017/fitness_adventure_db';
+    DEFAULT_ATLAS_URI;
 
   if (
     mongoUri.includes('<db_password>') ||
@@ -320,55 +321,24 @@ const _performConnect = async () => {
     return;
   }
 
-  const usingLocal = !isAtlasUri(mongoUri);
-  if (usingLocal && isProduction()) {
-    console.info('[MongoDB] Cloud/Netlify/Render environment detected without Atlas MONGO_URI — activating built-in In-Memory Mongoose Engine.');
-    await enableInMemoryMode();
-    return;
-  }
-
-  if (usingLocal) {
-    console.info('[MongoDB] Attempting connection to local MongoDB at mongodb://localhost:27017/…');
-  } else {
-    console.info('[MongoDB] Connecting to MongoDB Atlas (24104011@nec.edu.in / cluster0.62gkyix.mongodb.net)…');
-  }
+  console.info('[MongoDB] Connecting to external MongoDB Atlas (cluster0.62gkyix.mongodb.net)…');
 
   try {
     const dbName = process.env.MONGO_DB_NAME || 'fitness_adventure_admin';
     const conn = await mongoose.connect(mongoUri, {
       dbName,
-      serverSelectionTimeoutMS: isAtlasUri(mongoUri) ? 6_000 : 3_000,
+      serverSelectionTimeoutMS: 8_000,
     });
 
     isConnected = true;
-    dbMode = isAtlasUri(mongoUri) ? 'mongodb-atlas' : 'mongodb-local';
+    dbMode = 'mongodb-atlas';
     console.log(`[MongoDB] ✓ Connected (${dbMode}): ${conn.connection.host}/${conn.connection.name}`);
     await ensureDefaultUsers();
     await ensureDefaultCatalog();
     await setupCompassMirror(conn);
     return;
   } catch (error) {
-    console.warn(`[MongoDB] Primary DB connection note (${error.message}).`);
-  }
-
-  // If primary was Atlas and we are running on local machine, connect to local MongoDB (mongodb://localhost:27017/)
-  if (!usingLocal && !isProduction()) {
-    try {
-      console.info('[MongoDB] Connecting to local MongoDB at mongodb://localhost:27017/…');
-      const conn = await mongoose.connect(localMongoUri, {
-        dbName: 'fitness_adventure_db',
-        serverSelectionTimeoutMS: 3_000,
-      });
-      isConnected = true;
-      dbMode = 'mongodb-local';
-      console.log(`[MongoDB] ✓ Connected (mongodb-local): mongodb://${conn.connection.host}:${conn.connection.port}/${conn.connection.name}`);
-      await ensureDefaultUsers();
-      await ensureDefaultCatalog();
-      await setupCompassMirror(conn);
-      return;
-    } catch (localErr) {
-      console.warn(`[MongoDB] Local MongoDB unavailable (${localErr.message}).`);
-    }
+    console.warn(`[MongoDB] Atlas connection note (${error.message}).`);
   }
 
   if (isFallbackAllowed()) {
@@ -397,8 +367,7 @@ const getDBStatus = () => isConnected || mongoose.connection.readyState === 1;
 const getDBInfo = () => ({
   connected: getDBStatus(),
   mode: dbMode,
-  uri: dbMode === 'mongodb-local' ? 'mongodb://localhost:27017/' : undefined,
-  dbName: mongoose.connection?.name || process.env.MONGO_DB_NAME || 'fitness_adventure_db',
+  dbName: mongoose.connection?.name || process.env.MONGO_DB_NAME || 'fitness_adventure_admin',
 });
 
 module.exports = { connectDB, getDBStatus, getDBInfo };

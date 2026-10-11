@@ -1,9 +1,33 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Loader2, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Loader2, UserPlus, X, ArrowLeft } from 'lucide-react';
+import API from '../services/api';
 
 const DEFAULT_CLIENT_ID = '272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com';
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_CLIENT_ID;
-const AUTHORIZED_REDIRECT_URI = 'http://localhost:5173';
+const SAVED_ACCOUNTS_KEY = 'smartfit_google_accounts_v3';
+
+const DEFAULT_GOOGLE_ACCOUNTS = [
+  {
+    email: '24104011@nec.edu.in',
+    name: 'KARTHIKEYAN S CSE-2024',
+    picture: 'https://lh3.googleusercontent.com/a/ACg8ocJOaTY8jPYo_Z76nG7XdnYRt2It8gcBBvM4s0wsD7PVDPaIq73f=s96-c',
+  },
+  {
+    email: 'kartikeyanworkspace@gmail.com',
+    name: 'KARTHIKEYAN S',
+    picture: 'https://lh3.googleusercontent.com/a/ACg8ocISvElxRKNyiDB67wMdUly_4s1ZInCCKda-4XH7eVXdAfv3Ag=s96-c',
+  },
+  {
+    email: 'revathigokul43@gmail.com',
+    name: 'Gokul Revathi',
+    picture: 'https://ui-avatars.com/api/?name=Gokul+Revathi&background=4285F4&color=fff&bold=true',
+  },
+  {
+    email: '24104125@nec.edu.in',
+    name: 'RAGHAVAN P CSE-2024',
+    picture: 'https://lh3.googleusercontent.com/a/ACg8ocK0whZQKpNZ0CTwnBExijUaiHymTP7uGBOkGWwiHZe2NEcnFoIu=s96-c',
+  },
+];
 
 export const decodeJwt = (token) => {
   try {
@@ -22,27 +46,48 @@ export const decodeJwt = (token) => {
   }
 };
 
-export const parseGoogleOAuthHash = (rawHash) => {
-  if (!rawHash) return null;
-  const cleaned = rawHash.startsWith('#') ? rawHash.slice(1) : rawHash;
-  const params = new URLSearchParams(cleaned);
-  const accessToken = params.get('access_token') || '';
-  const idToken = params.get('id_token') || '';
-  const error = params.get('error') || '';
-  const stateStr = params.get('state') || '';
-
-  if (!accessToken && !idToken && !error) return null;
-
-  let state = {};
-  if (stateStr) {
-    try {
-      state = JSON.parse(atob(stateStr));
-    } catch {
-      state = {};
+const mergeUniqueAccounts = (...lists) => {
+  const seen = new Set();
+  const result = [];
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const acc of list) {
+      const email = acc?.email?.trim()?.toLowerCase();
+      if (!email || seen.has(email)) continue;
+      seen.add(email);
+      const name =
+        acc.name?.trim() ||
+        email
+          .split('@')[0]
+          .replace(/[._-]/g, ' ')
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+      result.push({
+        email,
+        name,
+        picture:
+          acc.picture ||
+          `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4285F4&color=fff&bold=true`,
+      });
     }
   }
+  return result;
+};
 
-  return { accessToken, idToken, error, state };
+const getSavedAccounts = () => {
+  try {
+    const raw = localStorage.getItem(SAVED_ACCOUNTS_KEY);
+    const saved = raw ? JSON.parse(raw) : [];
+    return mergeUniqueAccounts(saved, DEFAULT_GOOGLE_ACCOUNTS);
+  } catch {
+    return DEFAULT_GOOGLE_ACCOUNTS;
+  }
+};
+
+const saveCustomAccount = (account) => {
+  try {
+    const updated = mergeUniqueAccounts([account], getSavedAccounts());
+    localStorage.setItem(SAVED_ACCOUNTS_KEY, JSON.stringify(updated));
+  } catch {}
 };
 
 const GoogleLogo = ({ size = 20 }) => (
@@ -61,304 +106,105 @@ const GoogleOAuthButton = ({
   onSuccess,
   onError,
 }) => {
+  const [showChooser, setShowChooser] = useState(false);
+  const [addingAccount, setAddingAccount] = useState(false);
+  const [accounts, setAccounts] = useState(getSavedAccounts);
+  const [selectedEmail, setSelectedEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [showCloudPrompt, setShowCloudPrompt] = useState(false);
-  const [googleEmail, setGoogleEmail] = useState('');
-  const [googleName, setGoogleName] = useState('');
-  const [promptError, setPromptError] = useState('');
-  const popupRef = useRef(null);
-  const pollTimerRef = useRef(null);
-  const processedHashRef = useRef('');
-
-  const completeWithHash = useCallback(
-    async (rawHash) => {
-      if (!rawHash || processedHashRef.current === rawHash) return;
-      const parsed = parseGoogleOAuthHash(rawHash);
-      if (!parsed) return;
-
-      processedHashRef.current = rawHash;
-      try {
-        localStorage.removeItem('smartfit_google_oauth_hash');
-      } catch {}
-
-      if (pollTimerRef.current) {
-        clearInterval(pollTimerRef.current);
-        pollTimerRef.current = null;
-      }
-
-      if (parsed.error) {
-        setSubmitting(false);
-        onError?.(`Google Sign-In error: ${parsed.error}`);
-        return;
-      }
-
-      setSubmitting(true);
-      onError?.('');
-
-      try {
-        let profile = {};
-        if (parsed.idToken) {
-          const decoded = decodeJwt(parsed.idToken);
-          if (decoded) {
-            profile = {
-              email: decoded.email || '',
-              name:
-                decoded.name ||
-                decoded.given_name ||
-                (decoded.email ? decoded.email.split('@')[0] : ''),
-              picture: decoded.picture || '',
-              googleId: decoded.sub || '',
-            };
-          }
-        }
-
-        if ((!profile.email || !profile.name) && parsed.accessToken) {
-          try {
-            const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-              headers: { Authorization: `Bearer ${parsed.accessToken}` },
-            });
-            if (res.ok) {
-              const info = await res.json();
-              profile = {
-                email: info.email || profile.email || '',
-                name:
-                  info.name ||
-                  info.given_name ||
-                  profile.name ||
-                  (info.email ? info.email.split('@')[0] : ''),
-                picture: info.picture || profile.picture || '',
-                googleId: info.sub || profile.googleId || '',
-              };
-            }
-          } catch {}
-        }
-
-        const effectiveRole = parsed.state?.role || role || 'user';
-
-        const result = await loginWithGoogle('demo_google_credential', {
-          ...profile,
-          clientId: GOOGLE_CLIENT_ID,
-          idToken: parsed.idToken,
-          accessToken: parsed.accessToken,
-          role: effectiveRole,
-        });
-
-        if (result?.success) {
-          onSuccess?.(result.user);
-        } else {
-          onError?.(result?.message || 'Google login failed.');
-        }
-      } catch {
-        onError?.('Google authentication failed. Please try again.');
-      } finally {
-        setSubmitting(false);
-      }
-    },
-    [loginWithGoogle, onError, onSuccess, role]
-  );
+  const [customEmail, setCustomEmail] = useState('');
+  const [customName, setCustomName] = useState('');
+  const [modalError, setModalError] = useState('');
 
   useEffect(() => {
-    const handleMessage = (event) => {
-      if (event.data?.type === 'SMARTFIT_GOOGLE_AUTH' && event.data?.hash) {
-        completeWithHash(event.data.hash);
-      }
-    };
-
-    const handleStorage = (event) => {
-      if (event.key === 'smartfit_google_oauth_hash' && event.newValue) {
-        try {
-          const payload = JSON.parse(event.newValue);
-          if (payload?.hash) {
-            completeWithHash(payload.hash);
-          }
-        } catch {}
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-    window.addEventListener('storage', handleStorage);
-
-    if (
-      window.location.hash &&
-      (window.location.hash.includes('access_token=') ||
-        window.location.hash.includes('id_token='))
-    ) {
-      const hashToProcess = window.location.hash;
-      window.history.replaceState(
-        null,
-        '',
-        window.location.pathname + window.location.search
-      );
-      completeWithHash(hashToProcess);
-    }
-
+    if (!showChooser) return;
+    let active = true;
+    API.get('/auth/google/accounts')
+      .then(({ data }) => {
+        if (active && Array.isArray(data?.accounts)) {
+          setAccounts((prev) => mergeUniqueAccounts(prev, data.accounts));
+        }
+      })
+      .catch(() => {});
     return () => {
-      window.removeEventListener('message', handleMessage);
-      window.removeEventListener('storage', handleStorage);
-      if (pollTimerRef.current) {
-        clearInterval(pollTimerRef.current);
-      }
+      active = false;
     };
-  }, [completeWithHash]);
+  }, [showChooser]);
 
-  const handleGoogleSignInClick = async () => {
+  const openAccountChooser = () => {
     onError?.('');
-    processedHashRef.current = '';
-    try {
-      localStorage.removeItem('smartfit_google_oauth_hash');
-    } catch {}
-
-    // Check if local callback relay (localhost:5000 / localhost:5173) is reachable on this device
-    let localRelayReachable =
-      window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1';
-
-    if (!localRelayReachable) {
-      try {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 900);
-        const r = await fetch('http://localhost:5000/api/health', {
-          mode: 'cors',
-          signal: ctrl.signal,
-        });
-        clearTimeout(t);
-        if (r.ok) localRelayReachable = true;
-      } catch {
-        localRelayReachable = false;
-      }
-    }
-
-    if (!localRelayReachable) {
-      setPromptError('');
-      setShowCloudPrompt(true);
-      return;
-    }
-
-    const statePayload = JSON.stringify({
-      role,
-      origin: window.location.origin,
-      returnPath: window.location.pathname,
-      ts: Date.now(),
-    });
-    const nonce =
-      Math.random().toString(36).substring(2) + Date.now().toString(36);
-
-    const params = new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      redirect_uri: AUTHORIZED_REDIRECT_URI,
-      response_type: 'token id_token',
-      scope: 'openid email profile',
-      prompt: 'select_account',
-      nonce,
-      state: btoa(statePayload),
-    });
-
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
-
-    const width = 520;
-    const height = 640;
-    const left = Math.max(0, Math.round(window.screenX + (window.outerWidth - width) / 2));
-    const top = Math.max(0, Math.round(window.screenY + (window.outerHeight - height) / 2));
-
-    const popup = window.open(
-      authUrl,
-      'SmartFitGoogleOAuth',
-      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`
-    );
-
-    if (!popup) {
-      window.location.href = authUrl;
-      return;
-    }
-
-    popupRef.current = popup;
-    setSubmitting(true);
-
-    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-    pollTimerRef.current = setInterval(async () => {
-      try {
-        const relayRes = await fetch('http://localhost:5000/api/auth/google/relay');
-        if (relayRes.ok) {
-          const relayData = await relayRes.json();
-          if (relayData?.hash) {
-            try {
-              if (popupRef.current && !popupRef.current.closed) {
-                popupRef.current.close();
-              }
-            } catch {}
-            completeWithHash(relayData.hash);
-            return;
-          }
-        }
-      } catch {}
-
-      try {
-        const stored = localStorage.getItem('smartfit_google_oauth_hash');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed?.hash) {
-            completeWithHash(parsed.hash);
-            return;
-          }
-        }
-      } catch {}
-
-      if (!popupRef.current || popupRef.current.closed) {
-        clearInterval(pollTimerRef.current);
-        pollTimerRef.current = null;
-        try {
-          const finalRes = await fetch('http://localhost:5000/api/auth/google/relay');
-          if (finalRes.ok) {
-            const finalData = await finalRes.json();
-            if (finalData?.hash) {
-              completeWithHash(finalData.hash);
-              return;
-            }
-          }
-        } catch {}
-        if (!processedHashRef.current) {
-          setSubmitting(false);
-        }
-      }
-    }, 300);
+    setModalError('');
+    setAccounts(getSavedAccounts());
+    setAddingAccount(false);
+    setShowChooser(true);
   };
 
-  const handleCloudGoogleSubmit = async (e) => {
+  const handleSelectAccount = async (account) => {
+    if (submitting) return;
+    setModalError('');
+    onError?.('');
+    setSelectedEmail(account.email);
+    setSubmitting(true);
+
+    try {
+      const email = account.email.trim().toLowerCase();
+      const name =
+        account.name?.trim() ||
+        email
+          .split('@')[0]
+          .replace(/[._-]/g, ' ')
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+      const picture =
+        account.picture ||
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4285F4&color=fff&bold=true`;
+
+      saveCustomAccount({ email, name, picture });
+
+      const result = await loginWithGoogle('demo_google_credential', {
+        clientId: GOOGLE_CLIENT_ID,
+        email,
+        name,
+        picture,
+        googleId: `google_${email}`,
+        role,
+      });
+
+      if (result?.success) {
+        setShowChooser(false);
+        onSuccess?.(result.user);
+      } else {
+        const msg = result?.message || 'Google sign-in failed.';
+        setModalError(msg);
+        onError?.(msg);
+      }
+    } catch {
+      const msg = 'Google authentication failed. Please try again.';
+      setModalError(msg);
+      onError?.(msg);
+    } finally {
+      setSubmitting(false);
+      setSelectedEmail('');
+    }
+  };
+
+  const handleCustomSubmit = async (e) => {
     e.preventDefault();
-    const email = googleEmail.trim().toLowerCase();
+    const email = customEmail.trim().toLowerCase();
     if (!email || !email.includes('@')) {
-      setPromptError('Please enter your Google / Gmail address.');
+      setModalError('Please enter a valid Google email address.');
       return;
     }
     const name =
-      googleName.trim() ||
+      customName.trim() ||
       email
         .split('@')[0]
         .replace(/[._-]/g, ' ')
         .replace(/\b\w/g, (c) => c.toUpperCase());
 
-    setSubmitting(true);
-    setPromptError('');
-    try {
-      const result = await loginWithGoogle('demo_google_credential', {
-        clientId: GOOGLE_CLIENT_ID,
-        email,
-        name,
-        picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4285F4&color=fff&bold=true`,
-        googleId: `google_${email}`,
-        role,
-      });
-      if (result?.success) {
-        setShowCloudPrompt(false);
-        onSuccess?.(result.user);
-      } else {
-        setPromptError(result?.message || 'Google sign-in failed.');
-      }
-    } catch {
-      setPromptError('Google authentication failed. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
+    await handleSelectAccount({
+      email,
+      name,
+      picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4285F4&color=fff&bold=true`,
+    });
   };
 
   return (
@@ -367,7 +213,7 @@ const GoogleOAuthButton = ({
         id="google-login-btn"
         type="button"
         disabled={submitting}
-        onClick={handleGoogleSignInClick}
+        onClick={openAccountChooser}
         style={{
           width: '100%',
           display: 'flex',
@@ -391,9 +237,9 @@ const GoogleOAuthButton = ({
         <span>{submitting ? 'Signing in with Google…' : label}</span>
       </button>
 
-      {showCloudPrompt && (
+      {showChooser && (
         <div
-          onClick={() => !submitting && setShowCloudPrompt(false)}
+          onClick={() => !submitting && setShowChooser(false)}
           style={{
             position: 'fixed',
             inset: 0,
@@ -410,7 +256,7 @@ const GoogleOAuthButton = ({
             onClick={(e) => e.stopPropagation()}
             style={{
               width: '100%',
-              maxWidth: '400px',
+              maxWidth: '420px',
               background: '#ffffff',
               color: '#202124',
               borderRadius: '12px',
@@ -437,7 +283,7 @@ const GoogleOAuthButton = ({
               <button
                 type="button"
                 disabled={submitting}
-                onClick={() => setShowCloudPrompt(false)}
+                onClick={() => setShowChooser(false)}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -451,110 +297,321 @@ const GoogleOAuthButton = ({
               </button>
             </div>
 
-            <form onSubmit={handleCloudGoogleSubmit} style={{ padding: '1.5rem 1.75rem' }}>
-              <h3 style={{ margin: '0 0 0.35rem', fontSize: '1.25rem', fontWeight: 600, color: '#202124' }}>
-                Sign in with your Google ID
-              </h3>
-              <p style={{ margin: '0 0 1.1rem', fontSize: '0.86rem', color: '#5f6368' }}>
-                to continue to <strong style={{ color: '#202124' }}>SmartFit Adventure</strong>
-              </p>
+            <div style={{ padding: '1.5rem 1.75rem 1.75rem' }}>
+              {!addingAccount ? (
+                <>
+                  <h3
+                    style={{
+                      margin: '0 0 0.35rem',
+                      fontSize: '1.35rem',
+                      fontWeight: 600,
+                      color: '#202124',
+                      textAlign: 'center',
+                    }}
+                  >
+                    Choose an account
+                  </h3>
+                  <p
+                    style={{
+                      margin: '0 0 1.25rem',
+                      fontSize: '0.9rem',
+                      color: '#5f6368',
+                      textAlign: 'center',
+                    }}
+                  >
+                    to continue to <strong style={{ color: '#202124' }}>SmartFit Adventure</strong>
+                  </p>
 
-              {promptError && (
-                <div
-                  style={{
-                    background: '#fce8e6',
-                    color: '#d93025',
-                    padding: '0.6rem 0.85rem',
-                    borderRadius: '8px',
-                    fontSize: '0.82rem',
-                    marginBottom: '0.9rem',
-                  }}
-                >
-                  {promptError}
-                </div>
+                  {modalError && (
+                    <div
+                      style={{
+                        background: '#fce8e6',
+                        color: '#d93025',
+                        padding: '0.6rem 0.85rem',
+                        borderRadius: '8px',
+                        fontSize: '0.82rem',
+                        marginBottom: '0.9rem',
+                      }}
+                    >
+                      {modalError}
+                    </div>
+                  )}
+
+                  <div style={{ borderTop: '1px solid #e8eaed', maxHeight: '260px', overflowY: 'auto' }}>
+                    {accounts.map((acc) => {
+                      const isRowSubmitting = submitting && selectedEmail === acc.email;
+                      return (
+                        <button
+                          key={acc.email}
+                          type="button"
+                          disabled={submitting}
+                          onClick={() => handleSelectAccount(acc)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.85rem',
+                            width: '100%',
+                            padding: '0.75rem 0.65rem',
+                            background: 'transparent',
+                            border: 'none',
+                            borderBottom: '1px solid #e8eaed',
+                            cursor: submitting ? 'wait' : 'pointer',
+                            textAlign: 'left',
+                            transition: 'background 0.15s',
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!submitting) e.currentTarget.style.background = '#f8f9fa';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'transparent';
+                          }}
+                        >
+                          <img
+                            src={acc.picture}
+                            alt={acc.name}
+                            onError={(e) => {
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(acc.name || acc.email)}&background=4285F4&color=fff&bold=true`;
+                            }}
+                            style={{
+                              width: 38,
+                              height: 38,
+                              borderRadius: '50%',
+                              objectFit: 'cover',
+                              flexShrink: 0,
+                            }}
+                          />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: '0.92rem',
+                                fontWeight: 600,
+                                color: '#202124',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}
+                            >
+                              {acc.name}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: '0.8rem',
+                                color: '#5f6368',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}
+                            >
+                              {acc.email}
+                            </div>
+                          </div>
+                          {isRowSubmitting && <Loader2 size={16} className="spin" color="#1a73e8" />}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => {
+                        setModalError('');
+                        setAddingAccount(true);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.85rem',
+                        width: '100%',
+                        padding: '0.85rem 0.65rem',
+                        background: 'transparent',
+                        border: 'none',
+                        borderBottom: '1px solid #e8eaed',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        color: '#3c4043',
+                        fontWeight: 500,
+                        fontSize: '0.9rem',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#f8f9fa';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent';
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 38,
+                          height: 38,
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#5f6368',
+                        }}
+                      >
+                        <UserPlus size={19} />
+                      </div>
+                      <span>Use another account</span>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <form onSubmit={handleCustomSubmit}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModalError('');
+                      setAddingAccount(false);
+                    }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      background: 'none',
+                      border: 'none',
+                      color: '#1a73e8',
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      padding: 0,
+                      marginBottom: '0.85rem',
+                    }}
+                  >
+                    <ArrowLeft size={15} /> Back to accounts
+                  </button>
+
+                  <h3
+                    style={{
+                      margin: '0 0 0.35rem',
+                      fontSize: '1.25rem',
+                      fontWeight: 600,
+                      color: '#202124',
+                    }}
+                  >
+                    Sign in with Google
+                  </h3>
+                  <p style={{ margin: '0 0 1.1rem', fontSize: '0.86rem', color: '#5f6368' }}>
+                    Enter your Google email to continue to SmartFit Adventure
+                  </p>
+
+                  {modalError && (
+                    <div
+                      style={{
+                        background: '#fce8e6',
+                        color: '#d93025',
+                        padding: '0.6rem 0.85rem',
+                        borderRadius: '8px',
+                        fontSize: '0.82rem',
+                        marginBottom: '0.9rem',
+                      }}
+                    >
+                      {modalError}
+                    </div>
+                  )}
+
+                  <div style={{ marginBottom: '0.85rem' }}>
+                    <label
+                      style={{
+                        display: 'block',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        color: '#5f6368',
+                        marginBottom: '0.35rem',
+                      }}
+                    >
+                      Google Email or Gmail ID
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      autoFocus
+                      placeholder="yourname@gmail.com"
+                      value={customEmail}
+                      onChange={(e) => setCustomEmail(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '0.7rem 0.85rem',
+                        borderRadius: '6px',
+                        border: '1px solid #dadce0',
+                        fontSize: '0.92rem',
+                        color: '#202124',
+                        background: '#fff',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: '1.25rem' }}>
+                    <label
+                      style={{
+                        display: 'block',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        color: '#5f6368',
+                        marginBottom: '0.35rem',
+                      }}
+                    >
+                      Display Name (optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Your Name"
+                      value={customName}
+                      onChange={(e) => setCustomName(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '0.7rem 0.85rem',
+                        borderRadius: '6px',
+                        border: '1px solid #dadce0',
+                        fontSize: '0.92rem',
+                        color: '#202124',
+                        background: '#fff',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => setAddingAccount(false)}
+                      style={{
+                        padding: '0.6rem 1rem',
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: 'transparent',
+                        color: '#1a73e8',
+                        fontWeight: 600,
+                        fontSize: '0.88rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      style={{
+                        padding: '0.6rem 1.35rem',
+                        borderRadius: '6px',
+                        border: 'none',
+                        background: '#1a73e8',
+                        color: '#fff',
+                        fontWeight: 600,
+                        fontSize: '0.88rem',
+                        cursor: submitting ? 'wait' : 'pointer',
+                      }}
+                    >
+                      {submitting ? 'Signing in…' : 'Continue'}
+                    </button>
+                  </div>
+                </form>
               )}
-
-              <div style={{ marginBottom: '0.85rem' }}>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#5f6368', marginBottom: '0.35rem' }}>
-                  Google Email or Gmail ID
-                </label>
-                <input
-                  type="email"
-                  required
-                  autoFocus
-                  placeholder="yourname@gmail.com"
-                  value={googleEmail}
-                  onChange={(e) => setGoogleEmail(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.7rem 0.85rem',
-                    borderRadius: '6px',
-                    border: '1px solid #dadce0',
-                    fontSize: '0.92rem',
-                    color: '#202124',
-                    background: '#fff',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-
-              <div style={{ marginBottom: '1.25rem' }}>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#5f6368', marginBottom: '0.35rem' }}>
-                  Your Name (optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="Your Name"
-                  value={googleName}
-                  onChange={(e) => setGoogleName(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '0.7rem 0.85rem',
-                    borderRadius: '6px',
-                    border: '1px solid #dadce0',
-                    fontSize: '0.92rem',
-                    color: '#202124',
-                    background: '#fff',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowCloudPrompt(false)}
-                  style={{
-                    padding: '0.6rem 1rem',
-                    borderRadius: '6px',
-                    border: 'none',
-                    background: 'transparent',
-                    color: '#1a73e8',
-                    fontWeight: 600,
-                    fontSize: '0.88rem',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  style={{
-                    padding: '0.6rem 1.35rem',
-                    borderRadius: '6px',
-                    border: 'none',
-                    background: '#1a73e8',
-                    color: '#fff',
-                    fontWeight: 600,
-                    fontSize: '0.88rem',
-                    cursor: submitting ? 'wait' : 'pointer',
-                  }}
-                >
-                  {submitting ? 'Signing in…' : 'Continue'}
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
