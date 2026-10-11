@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
@@ -8,7 +9,7 @@ const dotenv = require('dotenv');
 dotenv.config({ path: path.join(__dirname, '.env') });
 dotenv.config();
 
-const { connectDB } = require('./config/db');
+const { connectDB, getDBInfo } = require('./config/db');
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 const { initCSVStore } = require('./utils/csvManager');
 
@@ -38,23 +39,66 @@ initCSVStore();
 const app = express();
 
 // Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(cors({ origin: true, credentials: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Ensure upload directory exists
-const uploadDir = path.join(__dirname, 'uploads/profile-images');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+// Normalize Netlify Function paths (/.netlify/functions/api/* -> /api/*) and ensure DB is connected
+app.use(async (req, res, next) => {
+  if (req.url.startsWith('/.netlify/functions/api')) {
+    req.url = req.url.replace('/.netlify/functions/api', '/api') || '/api';
+  } else if (
+    !req.url.startsWith('/api') &&
+    !req.url.startsWith('/uploads') &&
+    (process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME || req.headers['x-nf-request-id'])
+  ) {
+    req.url = `/api${req.url.startsWith('/') ? '' : '/'}${req.url}`;
+  }
+
+  if (req.url.startsWith('/api')) {
+    try {
+      await connectDB();
+    } catch (err) {
+      console.warn('[DB Middleware] connectDB warning:', err.message);
+    }
+  }
+  next();
+});
+
+// Ensure upload directory exists (serverless-safe)
+const isServerless = Boolean(
+  process.env.NETLIFY ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.VERCEL
+);
+const uploadBaseDir = isServerless
+  ? path.join(os.tmpdir(), 'fitness-uploads')
+  : path.join(__dirname, 'uploads');
+const uploadDir = path.join(uploadBaseDir, 'profile-images');
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+} catch (err) {
+  console.warn('[Uploads] Could not create upload directory:', err.message);
 }
 
 // Serve uploaded static files
+app.use('/uploads', express.static(uploadBaseDir));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.get('/api/health', (req, res) => {
+  const dbInfo = getDBInfo();
+  const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com';
   res.json({
     status: 'OK',
     message: 'Fitness & Adventure API is running smoothly',
+    platform: process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME ? 'netlify-functions' : 'node-server',
+    database: dbInfo,
+    oauth: {
+      googleConfigured: Boolean(googleClientId && !googleClientId.startsWith('your-google-client-id')),
+      provider: 'Google OAuth 2.0 + MongoDB User Store',
+    },
     timestamp: new Date(),
   });
 });
@@ -79,11 +123,11 @@ app.use('/api/admin',   adminRoutes);    // admin only
 app.use('/api/trainer', trainerRoutes);  // trainer + admin
 app.use('/api/guide',   guideRoutes);    // guide + admin
 
-// ── Serve Frontend Static Build (if built) ───────────────────
+// ── Serve Frontend Static Build (if built & not running as serverless function) ──
 const clientDistPath = path.join(__dirname, '../client/dist');
 const clientIndexHtml = path.join(clientDistPath, 'index.html');
 
-if (fs.existsSync(clientIndexHtml)) {
+if (!isServerless && fs.existsSync(clientIndexHtml)) {
   app.use(express.static(clientDistPath));
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
@@ -97,6 +141,7 @@ if (fs.existsSync(clientIndexHtml)) {
     res.json({
       status: 'OK',
       message: 'Fitness & Adventure API is running smoothly',
+      database: getDBInfo(),
       timestamp: new Date(),
       endpoints: '/api/health, /api/auth, /api/fitness, /api/bmi, /api/adventure, /api/booking, /api/profile, /api/assessment, /api/ai, /api/admin, /api/trainer, /api/guide',
     });
@@ -115,18 +160,22 @@ process.on('unhandledRejection', (reason) => {
 app.use(notFound);
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 5000;
+if (require.main === module) {
+  const PORT = process.env.PORT || 5000;
 
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[Fitness & Adventure Server] Running on http://localhost:${PORT}`);
-  console.log(`[Roles] admin → /api/admin | trainer → /api/trainer | guide → /api/guide`);
-});
-
-const gracefulShutdown = () => {
-  server.close(() => {
-    process.exit(0);
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[Fitness & Adventure Server] Running on http://localhost:${PORT}`);
+    console.log(`[Roles] admin → /api/admin | trainer → /api/trainer | guide → /api/guide`);
   });
-};
 
-process.on('SIGINT', gracefulShutdown);
-process.on('SIGTERM', gracefulShutdown);
+  const gracefulShutdown = () => {
+    server.close(() => {
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGINT', gracefulShutdown);
+  process.on('SIGTERM', gracefulShutdown);
+}
+
+module.exports = app;

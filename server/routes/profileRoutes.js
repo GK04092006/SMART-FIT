@@ -1,6 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const fs      = require('fs');
+const os      = require('os');
 const path    = require('path');
 const multer  = require('multer');
 
@@ -16,10 +17,24 @@ const {
 const { protect } = require('../middleware/authMiddleware');
 const { FILES }   = require('../utils/csvManager');
 
+const isServerless = Boolean(
+  process.env.NETLIFY ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.VERCEL
+);
+const uploadDest = isServerless
+  ? path.join(os.tmpdir(), 'fitness-uploads/profile-images')
+  : path.join(__dirname, '../uploads/profile-images');
+
 // ── Storage configuration for profile image uploads ──────────
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../uploads/profile-images'));
+    try {
+      if (!fs.existsSync(uploadDest)) {
+        fs.mkdirSync(uploadDest, { recursive: true });
+      }
+    } catch (_) {}
+    cb(null, uploadDest);
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);

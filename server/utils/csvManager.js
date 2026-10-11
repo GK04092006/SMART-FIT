@@ -16,10 +16,18 @@
 'use strict';
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 // ── paths ────────────────────────────────────────────────────
-const DB_DIR = path.join(__dirname, '../database');
+const isServerless = Boolean(
+  process.env.NETLIFY ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.VERCEL
+);
+const DB_DIR = isServerless
+  ? path.join(os.tmpdir(), 'fitness-database')
+  : path.join(__dirname, '../database');
 
 const FILES = {
   registrations: path.join(DB_DIR, 'users_registrations.csv'),
@@ -103,12 +111,16 @@ function uid() {
 
 /** Ensure the database directory and the CSV file (with headers) exist */
 function ensureFile(filePath, headers) {
-  if (!fs.existsSync(DB_DIR)) {
-    fs.mkdirSync(DB_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(filePath)) {
-    const headerRow = headers.map(cell).join(',');
-    fs.writeFileSync(filePath, BOM + headerRow + '\r\n', 'utf8');
+  try {
+    if (!fs.existsSync(DB_DIR)) {
+      fs.mkdirSync(DB_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(filePath)) {
+      const headerRow = headers.map(cell).join(',');
+      fs.writeFileSync(filePath, BOM + headerRow + '\r\n', 'utf8');
+    }
+  } catch (err) {
+    console.warn('[CSV Store] File init skipped:', err.message);
   }
 }
 

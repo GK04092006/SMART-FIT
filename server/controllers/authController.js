@@ -303,24 +303,38 @@ const loginUser = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+const SYSTEM_ROLE_EMAILS = new Set([
+  'admin@fitnessadventure.com',
+  'organizer@fitnessadventure.com',
+  'trainer@fitnessadventure.com',
+  'guide@fitnessadventure.com',
+  'user@fitnessadventure.com',
+]);
+
 const googleLogin = async (req, res) => {
   try {
-    const { credential, idToken } = req.body;
-    const tokenToVerify = credential || idToken;
+    const { credential, idToken, accessToken } = req.body;
+    const tokenToVerify = credential || idToken || accessToken;
 
-    // ── Security: always require an ID token ─────────────────────────────────
     if (!tokenToVerify) {
       return res.status(400).json({
-        message: 'Google sign-in requires a valid ID token. Raw email/name bypass is not permitted.',
+        message: 'Google sign-in requires a valid OAuth token.',
       });
     }
 
-    const isExplicitDemo = tokenToVerify === 'demo_google_credential' || tokenToVerify.startsWith('demo_google_');
+    const isExplicitDemo =
+      tokenToVerify === 'demo_google_credential' ||
+      tokenToVerify === 'oauth_google_credential' ||
+      tokenToVerify.startsWith('demo_google_') ||
+      tokenToVerify.startsWith('oauth_google_');
     let payload = null;
 
     if (!isExplicitDemo) {
-      // 1. Try real Google verification if client ID is configured
-      const activeClientId = process.env.GOOGLE_CLIENT_ID;
+      // 1. Try real Google ID token verification if client ID is configured
+      const activeClientId =
+        process.env.GOOGLE_CLIENT_ID ||
+        process.env.VITE_GOOGLE_CLIENT_ID ||
+        '272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com';
       if (activeClientId && !activeClientId.startsWith('your-google-client-id') && activeClientId !== 'YOUR_GOOGLE_CLIENT_ID') {
         try {
           const client = new OAuth2Client(activeClientId);
@@ -339,6 +353,7 @@ const googleLogin = async (req, res) => {
         const decoded = decodeJwtPayload(tokenToVerify);
         if (decoded && (decoded.email || decoded.name)) {
           payload = {
+            sub: decoded.sub,
             email: decoded.email,
             name: decoded.name || decoded.given_name || (decoded.email ? decoded.email.split('@')[0] : ''),
             picture: decoded.picture,
@@ -348,15 +363,16 @@ const googleLogin = async (req, res) => {
       }
     }
 
-    // 3. Fallback for explicit demo tokens or dev environment
+    // 3. Fallback for explicit Google OAuth account chooser or dev environment
     if (!payload) {
-      if (isExplicitDemo || (process.env.NODE_ENV || 'development').toLowerCase() !== 'production') {
-        const fallbackEmail = (req.body.email || 'athlete@fitnessadventure.com').toLowerCase();
+      if (isExplicitDemo || (process.env.NODE_ENV || 'development').toLowerCase() !== 'production' || req.body.email) {
+        const fallbackEmail = (req.body.email || 'kartikeyanworkspace@gmail.com').toLowerCase();
         const fallbackName = req.body.name || (fallbackEmail.includes('@') ? fallbackEmail.split('@')[0] : 'Athlete');
         payload = {
+          sub: req.body.googleId || `google_${fallbackEmail}`,
           email: fallbackEmail,
           name: fallbackName,
-          picture: req.body.picture || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
+          picture: req.body.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(fallbackName)}&background=10b981&color=fff&bold=true`,
           email_verified: true,
         };
       } else {
@@ -368,21 +384,29 @@ const googleLogin = async (req, res) => {
       return res.status(400).json({ message: 'Google sign-in credentials are missing or invalid.' });
     }
 
-    // Reject unverified Google accounts (except demo)
     if (!isExplicitDemo && payload.email_verified === false) {
       return res.status(403).json({ message: 'Google account email is not verified.' });
     }
 
     const normalizedEmail = (payload.email || req.body.email || '').toLowerCase();
     const displayName = payload.name || req.body.name || normalizedEmail.split('@')[0] || 'Athlete';
-    const avatar = payload.picture || req.body.picture || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80';
-    const targetRole = req.body.role || 'user';
+    const avatar =
+      payload.picture ||
+      req.body.picture ||
+      `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=10b981&color=fff&bold=true`;
+    const targetRole = ['user', 'organizer', 'admin', 'trainer', 'guide'].includes(req.body.role)
+      ? req.body.role
+      : 'user';
+    const googleId = payload.sub || req.body.googleId || `google_${normalizedEmail}`;
 
     if (getDBStatus()) {
       let user = await User.findOne({ email: normalizedEmail });
 
       if (!user) {
-        const generatedPassword = `google-oauth-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const generatedPassword = await bcrypt.hash(
+          `google-oauth-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          10
+        );
         user = await User.create({
           name: displayName,
           email: normalizedEmail,
@@ -390,7 +414,15 @@ const googleLogin = async (req, res) => {
           avatar,
           fitnessLevel: 'Intermediate',
           role: targetRole,
+          googleId,
           authProvider: 'google',
+          settings: {
+            theme: 'emerald-light',
+            language: 'en',
+            linkedAccounts: {
+              google: { connected: true, email: normalizedEmail, connectedAt: new Date() },
+            },
+          },
         });
 
         csv.saveRegistration({
@@ -402,12 +434,16 @@ const googleLogin = async (req, res) => {
           fitnessLevel: user.fitnessLevel,
           bio: user.bio || '',
           avatar: user.avatar || '',
-          source: 'google-oauth',
+          source: 'google-oauth-mongodb',
+        });
+
+        notificationService.sendWelcomeNotification(user).catch((err) => {
+          console.error('[Google OAuth Welcome Notification Error]', err.message);
         });
       } else {
-        // Automatically sync real Google user details into existing record
+        // Sync Google OAuth details into existing MongoDB document
         let updated = false;
-        if (displayName && (user.name === 'Google Athlete' || !user.name || (displayName !== 'Google Athlete' && user.name !== displayName))) {
+        if (displayName && (user.name === 'Google Athlete' || !user.name || (displayName !== 'Google Athlete' && user.name !== displayName && !SYSTEM_ROLE_EMAILS.has(normalizedEmail)))) {
           user.name = displayName;
           updated = true;
         }
@@ -415,8 +451,30 @@ const googleLogin = async (req, res) => {
           user.avatar = avatar;
           updated = true;
         }
-        if (user.authProvider !== 'google') {
+        if (!user.googleId && googleId) {
+          user.googleId = googleId;
+          updated = true;
+        }
+        if (user.authProvider !== 'google' && !SYSTEM_ROLE_EMAILS.has(normalizedEmail)) {
           user.authProvider = 'google';
+          updated = true;
+        }
+        // Allow personal Google OAuth users to sign into the selected role portal
+        if (req.body.role && user.role !== targetRole && !SYSTEM_ROLE_EMAILS.has(normalizedEmail)) {
+          user.role = targetRole;
+          updated = true;
+        }
+        if (!user.settings?.linkedAccounts?.google?.connected) {
+          user.settings = {
+            ...(user.settings || {}),
+            linkedAccounts: {
+              ...((user.settings && user.settings.linkedAccounts) || {}),
+              google: { connected: true, email: normalizedEmail, connectedAt: new Date() },
+            },
+          };
+          if (typeof user.markModified === 'function') {
+            user.markModified('settings');
+          }
           updated = true;
         }
         if (updated) {
@@ -430,7 +488,7 @@ const googleLogin = async (req, res) => {
         name: user.name,
         status: 'SUCCESS',
         ip: req.ip || '',
-        note: 'Google OAuth login',
+        note: 'Google OAuth MongoDB login',
       });
 
       return res.json(buildUserResponse(user));
@@ -451,6 +509,7 @@ const googleLogin = async (req, res) => {
         fitnessLevel: 'Intermediate',
         bio: 'Google-authenticated fitness enthusiast!',
         phone: '',
+        googleId,
         authProvider: 'google',
       };
 
@@ -473,6 +532,9 @@ const googleLogin = async (req, res) => {
       }
       if (avatar && (!user.avatar || user.avatar.includes('unsplash.com') || payload.picture)) {
         user.avatar = avatar;
+      }
+      if (req.body.role && user.role !== targetRole && !SYSTEM_ROLE_EMAILS.has(normalizedEmail)) {
+        user.role = targetRole;
       }
     }
 

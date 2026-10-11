@@ -138,7 +138,15 @@ const uploadAvatar = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ message: 'No image file provided' });
     }
-    const avatarUrl = `/uploads/profile-images/${req.file.filename}`;
+    const fs = require('fs');
+    let avatarUrl = `/uploads/profile-images/${req.file.filename}`;
+    if (req.file.path && fs.existsSync(req.file.path)) {
+      try {
+        const buf = fs.readFileSync(req.file.path);
+        const mime = req.file.mimetype || 'image/jpeg';
+        avatarUrl = `data:${mime};base64,${buf.toString('base64')}`;
+      } catch (_) {}
+    }
 
     const userId = req.user?._id || req.user?.id;
     if (userId) {

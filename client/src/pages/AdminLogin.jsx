@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, LogIn, ShieldCheck, AlertCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import GoogleOAuthButton from '../components/GoogleOAuthButton';
 
 const AdminLogin = () => {
   const navigate = useNavigate();
-  const { login, logout, loading, error: authError } = useAuth();
+  const { login, loginWithGoogle, logout, loading, error: authError } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -88,6 +89,16 @@ const AdminLogin = () => {
             {loading ? 'Authenticating...' : 'Admin Sign In'} <LogIn size={18} />
           </button>
         </form>
+
+        <div style={{ marginTop: '1.25rem' }}>
+          <GoogleOAuthButton
+            role="admin"
+            label="Continue with Google (Admin)"
+            loginWithGoogle={loginWithGoogle}
+            onSuccess={() => navigate('/analytics')}
+            onError={setFormError}
+          />
+        </div>
 
         <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-subtle)', textAlign: 'center' }}>
           <button

@@ -205,6 +205,9 @@ const ensureDefaultCatalog = async () => {
   }
 };
 
+let dbMode = 'disconnected';
+let connectPromise = null;
+
 const isAtlasUri = (uri) =>
   uri.startsWith('mongodb+srv://') || uri.includes('.mongodb.net');
 
@@ -213,18 +216,23 @@ const isFallbackAllowed = () =>
 
 const isProduction = () =>
   Boolean(process.env.RENDER) ||
+  Boolean(process.env.NETLIFY) ||
+  Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME) ||
   (process.env.NODE_ENV || 'development').toLowerCase() === 'production';
 
 const enableInMemoryMode = async () => {
   activateInMemoryMongoose();
   isConnected = true;
+  dbMode = 'in-memory-mongoose';
   await ensureDefaultUsers();
   await ensureDefaultCatalog();
 };
 
-const connectDB = async () => {
+const _performConnect = async () => {
   const mongoUri =
-    process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/fitness_adventure_db';
+    process.env.MONGO_URI ||
+    process.env.MONGODB_URI ||
+    'mongodb://127.0.0.1:27017/fitness_adventure_db';
 
   if (
     mongoUri.includes('<db_password>') ||
@@ -238,7 +246,7 @@ const connectDB = async () => {
 
   const usingLocal = !isAtlasUri(mongoUri);
   if (usingLocal && isProduction()) {
-    console.info('[MongoDB] Cloud environment detected without Atlas MONGO_URI — activating built-in In-Memory Mongoose Engine.');
+    console.info('[MongoDB] Cloud/Netlify environment detected without Atlas MONGO_URI — activating built-in In-Memory Mongoose Engine.');
     await enableInMemoryMode();
     return;
   }
@@ -250,12 +258,15 @@ const connectDB = async () => {
   }
 
   try {
+    const dbName = process.env.MONGO_DB_NAME || 'fitness_adventure_db';
     const conn = await mongoose.connect(mongoUri, {
-      serverSelectionTimeoutMS: isAtlasUri(mongoUri) ? 10_000 : 3_000,
+      dbName,
+      serverSelectionTimeoutMS: isAtlasUri(mongoUri) ? 8_000 : 3_000,
     });
 
     isConnected = true;
-    console.log(`[MongoDB] ✓ Connected: ${conn.connection.host}/${conn.connection.name}`);
+    dbMode = isAtlasUri(mongoUri) ? 'mongodb-atlas' : 'mongodb-local';
+    console.log(`[MongoDB] ✓ Connected (${dbMode}): ${conn.connection.host}/${conn.connection.name}`);
     await ensureDefaultUsers();
     await ensureDefaultCatalog();
   } catch (error) {
@@ -265,11 +276,32 @@ const connectDB = async () => {
       await enableInMemoryMode();
     } else {
       console.error('[MongoDB] ALLOW_DB_FALLBACK is false and DB is unreachable.');
-      process.exit(1);
+      if (!process.env.NETLIFY && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
+        process.exit(1);
+      }
     }
   }
 };
 
+const connectDB = async () => {
+  if (isConnected || mongoose.connection.readyState === 1) {
+    return true;
+  }
+  if (!connectPromise) {
+    connectPromise = _performConnect().finally(() => {
+      connectPromise = null;
+    });
+  }
+  await connectPromise;
+  return isConnected;
+};
+
 const getDBStatus = () => isConnected || mongoose.connection.readyState === 1;
 
-module.exports = { connectDB, getDBStatus };
+const getDBInfo = () => ({
+  connected: getDBStatus(),
+  mode: dbMode,
+  dbName: mongoose.connection?.name || process.env.MONGO_DB_NAME || 'fitness_adventure_db',
+});
+
+module.exports = { connectDB, getDBStatus, getDBInfo };

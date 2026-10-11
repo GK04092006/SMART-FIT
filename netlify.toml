@@ -1,0 +1,39 @@
+[build]
+  command = "npm install && npm install --prefix server && npm install --include=dev --prefix client && npm run build --prefix client"
+  publish = "client/dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "20"
+  ALLOW_DB_FALLBACK = "true"
+  VITE_GOOGLE_CLIENT_ID = "272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com"
+  GOOGLE_CLIENT_ID = "272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com"
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = [
+    "express",
+    "mongoose",
+    "bcryptjs",
+    "cors",
+    "dotenv",
+    "google-auth-library",
+    "jsonwebtoken",
+    "multer",
+    "nodemailer",
+    "serverless-http"
+  ]
+  included_files = ["server/**"]
+
+# Route API requests to Netlify Serverless Express Backend
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
+
+# SPA Fallback for React Router
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

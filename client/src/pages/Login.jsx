@@ -7,9 +7,10 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import API from '../services/api';
+import GoogleOAuthButton from '../components/GoogleOAuthButton';
 
 /* ── Config ─────────────────────────────────────────────────────────────────── */
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com';
 const GOOGLE_CONFIGURED =
   GOOGLE_CLIENT_ID &&
   GOOGLE_CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID' &&
@@ -775,14 +776,13 @@ const Login = ({ expectedRole = 'user' }) => {
             {/* Google — shown in both tabs */}
             <Divider />
             {googleError && <ErrorBanner message={googleError} />}
-            {GOOGLE_CONFIGURED && googleReady ? (
-              <div ref={googleButtonRef} style={{ display: 'flex', justifyContent: 'center', width: '100%', minHeight: 44 }} />
-            ) : (
-              <GoogleButton
-                onClick={handleGoogleLogin}
-                label="Continue with Google"
-              />
-            )}
+            <GoogleOAuthButton
+              role={expectedRole}
+              label={`Continue with Google (${roleLabel})`}
+              loginWithGoogle={loginWithGoogle}
+              onSuccess={handleSuccess}
+              onError={setGoogleError}
+            />
           </div>
 
           {/* ── Footer ── */}
