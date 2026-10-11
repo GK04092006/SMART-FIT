@@ -172,6 +172,16 @@ if (require.main === module) {
     console.log(`[Roles] admin → /api/admin | trainer → /api/trainer | guide → /api/guide`);
   });
 
+  // Ensure http://localhost:5173 (Google OAuth Authorized Redirect URI) is also served if Vite is not running
+  if (Number(PORT) !== 5173) {
+    const oauthMirrorServer = app.listen(5173, '0.0.0.0', () => {
+      console.log(`[Google OAuth Redirect Listener] Also serving on http://localhost:5173`);
+    });
+    oauthMirrorServer.on('error', () => {
+      // Port 5173 is already served by Vite dev server — no action needed
+    });
+  }
+
   const gracefulShutdown = () => {
     server.close(() => {
       process.exit(0);

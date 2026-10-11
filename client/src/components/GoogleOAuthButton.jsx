@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
 
 const DEFAULT_CLIENT_ID = '272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com';
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_CLIENT_ID;
+// Authorized Redirect URI registered in Google Cloud Console for this Client ID
+const AUTHORIZED_REDIRECT_URI = 'http://localhost:5173';
 
-const decodeJwt = (token) => {
+export const decodeJwt = (token) => {
   try {
     const base64Url = token?.split('.')?.[1];
     if (!base64Url) return null;
@@ -19,6 +21,29 @@ const decodeJwt = (token) => {
   } catch {
     return null;
   }
+};
+
+export const parseGoogleOAuthHash = (rawHash) => {
+  if (!rawHash) return null;
+  const cleaned = rawHash.startsWith('#') ? rawHash.slice(1) : rawHash;
+  const params = new URLSearchParams(cleaned);
+  const accessToken = params.get('access_token') || '';
+  const idToken = params.get('id_token') || '';
+  const error = params.get('error') || '';
+  const stateStr = params.get('state') || '';
+
+  if (!accessToken && !idToken && !error) return null;
+
+  let state = {};
+  if (stateStr) {
+    try {
+      state = JSON.parse(atob(stateStr));
+    } catch {
+      state = {};
+    }
+  }
+
+  return { accessToken, idToken, error, state };
 };
 
 const GoogleLogo = ({ size = 20 }) => (
@@ -38,170 +63,263 @@ const GoogleOAuthButton = ({
   onError,
 }) => {
   const [submitting, setSubmitting] = useState(false);
-  const [googleReady, setGoogleReady] = useState(false);
-  const gsiContainerRef = useRef(null);
+  const popupRef = useRef(null);
+  const pollTimerRef = useRef(null);
+  const processedHashRef = useRef('');
 
-  // Load Google Identity Services script
-  useEffect(() => {
-    if (window.google?.accounts?.id) {
-      setGoogleReady(true);
-      return;
-    }
+  const completeWithHash = useCallback(
+    async (rawHash) => {
+      if (!rawHash || processedHashRef.current === rawHash) return;
+      const parsed = parseGoogleOAuthHash(rawHash);
+      if (!parsed) return;
 
-    const id = 'google-oauth-script';
-    let script = document.getElementById(id);
-    const isNew = !script;
-    if (!script) {
-      script = document.createElement('script');
-      script.id = id;
-      script.src = 'https://accounts.google.com/gsi/client';
-      script.async = true;
-      script.defer = true;
-    }
-    const handleLoad = () => {
-      if (window.google?.accounts?.id) setGoogleReady(true);
-    };
-    script.addEventListener('load', handleLoad);
-    if (isNew) document.head.appendChild(script);
-    return () => script.removeEventListener('load', handleLoad);
-  }, []);
+      processedHashRef.current = rawHash;
+      try {
+        localStorage.removeItem('smartfit_google_oauth_hash');
+      } catch {}
 
-  const handleGoogleGsiCredential = async (response) => {
-    onError?.('');
-    if (!response?.credential) {
-      onError?.('Google did not return a sign-in credential. Please try again.');
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const payload = decodeJwt(response.credential);
-      const profile = payload
-        ? {
-            name: payload.name || payload.given_name || (payload.email ? payload.email.split('@')[0] : ''),
-            email: payload.email || '',
-            picture: payload.picture || '',
-            googleId: payload.sub || '',
-          }
-        : {};
-      const result = await loginWithGoogle(response.credential, { ...profile, role });
-      if (result?.success) {
-        onSuccess?.(result.user);
-      } else {
-        onError?.(result?.message || 'Google login failed.');
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
       }
-    } catch {
-      onError?.('Google authentication failed.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
-  // Render official "Continue with Google" button
-  useEffect(() => {
-    if (!googleReady || !gsiContainerRef.current || !window.google?.accounts?.id) return;
-    try {
-      window.google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleGoogleGsiCredential,
-      });
-      const measuredWidth = gsiContainerRef.current.getBoundingClientRect().width;
-      const btnWidth = Math.min(380, Math.max(240, Math.floor(measuredWidth) || 340));
-      window.google.accounts.id.renderButton(gsiContainerRef.current, {
-        type: 'standard',
-        theme: 'outline',
-        size: 'large',
-        text: 'continue_with',
-        shape: 'rectangular',
-        width: btnWidth,
-      });
-    } catch (_) {}
-    return () => {
-      if (gsiContainerRef.current) gsiContainerRef.current.replaceChildren();
-    };
-  }, [googleReady, role]);
+      if (parsed.error) {
+        setSubmitting(false);
+        onError?.(`Google Sign-In error: ${parsed.error}`);
+        return;
+      }
 
-  // Fallback click handler if GSI button hasn't rendered yet: opens Google's official OAuth2 popup
-  const handleFallbackClick = () => {
-    onError?.('');
-    if (window.google?.accounts?.oauth2) {
-      const tokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_CLIENT_ID,
-        scope: 'openid email profile',
-        callback: async (tokenResponse) => {
-          if (!tokenResponse?.access_token) return;
-          setSubmitting(true);
+      setSubmitting(true);
+      onError?.('');
+
+      try {
+        let profile = {};
+        if (parsed.idToken) {
+          const decoded = decodeJwt(parsed.idToken);
+          if (decoded) {
+            profile = {
+              email: decoded.email || '',
+              name:
+                decoded.name ||
+                decoded.given_name ||
+                (decoded.email ? decoded.email.split('@')[0] : ''),
+              picture: decoded.picture || '',
+              googleId: decoded.sub || '',
+            };
+          }
+        }
+
+        if ((!profile.email || !profile.name) && parsed.accessToken) {
           try {
             const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-              headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+              headers: { Authorization: `Bearer ${parsed.accessToken}` },
             });
-            const info = await res.json();
-            if (info?.email) {
-              const result = await loginWithGoogle(tokenResponse.access_token, {
-                email: info.email,
-                name: info.name || info.given_name || info.email.split('@')[0],
-                picture: info.picture || '',
-                googleId: info.sub || '',
-                role,
-              });
-              if (result?.success) {
-                onSuccess?.(result.user);
-              } else {
-                onError?.(result?.message || 'Google login failed.');
-              }
+            if (res.ok) {
+              const info = await res.json();
+              profile = {
+                email: info.email || profile.email || '',
+                name:
+                  info.name ||
+                  info.given_name ||
+                  profile.name ||
+                  (info.email ? info.email.split('@')[0] : ''),
+                picture: info.picture || profile.picture || '',
+                googleId: info.sub || profile.googleId || '',
+              };
             }
-          } catch {
-            onError?.('Google login failed. Please try again.');
-          } finally {
-            setSubmitting(false);
+          } catch {}
+        }
+
+        const effectiveRole = parsed.state?.role || role || 'user';
+        const credentialToken = parsed.idToken || parsed.accessToken;
+
+        const result = await loginWithGoogle(credentialToken, {
+          ...profile,
+          idToken: parsed.idToken,
+          accessToken: parsed.accessToken,
+          role: effectiveRole,
+        });
+
+        if (result?.success) {
+          onSuccess?.(result.user);
+        } else {
+          onError?.(result?.message || 'Google login failed.');
+        }
+      } catch {
+        onError?.('Google authentication failed. Please try again.');
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [loginWithGoogle, onError, onSuccess, role]
+  );
+
+  // Listen for popup postMessage and storage events
+  useEffect(() => {
+    const handleMessage = (event) => {
+      if (event.data?.type === 'SMARTFIT_GOOGLE_AUTH' && event.data?.hash) {
+        completeWithHash(event.data.hash);
+      }
+    };
+
+    const handleStorage = (event) => {
+      if (event.key === 'smartfit_google_oauth_hash' && event.newValue) {
+        try {
+          const payload = JSON.parse(event.newValue);
+          if (payload?.hash) {
+            completeWithHash(payload.hash);
           }
-        },
-      });
-      tokenClient.requestAccessToken({ prompt: 'select_account' });
+        } catch {}
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    window.addEventListener('storage', handleStorage);
+
+    // Also check if current window arrived with #access_token or #id_token
+    if (
+      window.location.hash &&
+      (window.location.hash.includes('access_token=') ||
+        window.location.hash.includes('id_token='))
+    ) {
+      const hashToProcess = window.location.hash;
+      window.history.replaceState(
+        null,
+        '',
+        window.location.pathname + window.location.search
+      );
+      completeWithHash(hashToProcess);
+    }
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      window.removeEventListener('storage', handleStorage);
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+      }
+    };
+  }, [completeWithHash]);
+
+  const handleGoogleSignInClick = () => {
+    onError?.('');
+    processedHashRef.current = '';
+    try {
+      localStorage.removeItem('smartfit_google_oauth_hash');
+    } catch {}
+
+    const statePayload = JSON.stringify({
+      role,
+      returnPath: window.location.pathname,
+      ts: Date.now(),
+    });
+    const nonce =
+      Math.random().toString(36).substring(2) + Date.now().toString(36);
+
+    const params = new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      redirect_uri: AUTHORIZED_REDIRECT_URI,
+      response_type: 'token id_token',
+      scope: 'openid email profile',
+      prompt: 'select_account',
+      nonce,
+      state: btoa(statePayload),
+    });
+
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+
+    const width = 520;
+    const height = 640;
+    const left = Math.max(0, Math.round(window.screenX + (window.outerWidth - width) / 2));
+    const top = Math.max(0, Math.round(window.screenY + (window.outerHeight - height) / 2));
+
+    const popup = window.open(
+      authUrl,
+      'SmartFitGoogleOAuth',
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`
+    );
+
+    if (!popup) {
+      // Popup blocked: navigate directly
+      window.location.href = authUrl;
       return;
     }
 
-    if (window.google?.accounts?.id) {
-      window.google.accounts.id.prompt();
-    }
+    popupRef.current = popup;
+    setSubmitting(true);
+
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    pollTimerRef.current = setInterval(() => {
+      // 1. Check localStorage relay
+      try {
+        const stored = localStorage.getItem('smartfit_google_oauth_hash');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed?.hash) {
+            completeWithHash(parsed.hash);
+            return;
+          }
+        }
+      } catch {}
+
+      // 2. Check popup location hash directly if same-origin
+      try {
+        if (popupRef.current && !popupRef.current.closed) {
+          const popupHash = popupRef.current.location?.hash || '';
+          if (
+            popupHash.includes('access_token=') ||
+            popupHash.includes('id_token=') ||
+            popupHash.includes('error=')
+          ) {
+            popupRef.current.close();
+            completeWithHash(popupHash);
+            return;
+          }
+        }
+      } catch {
+        // Cross-origin while on accounts.google.com — expected
+      }
+
+      // 3. Detect if user closed the popup manually
+      if (!popupRef.current || popupRef.current.closed) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+        if (!processedHashRef.current) {
+          setSubmitting(false);
+        }
+      }
+    }, 250);
   };
 
-  if (googleReady) {
-    return (
-      <div
-        ref={gsiContainerRef}
-        style={{ display: 'flex', justifyContent: 'center', width: '100%', minHeight: 44 }}
-      />
-    );
-  }
-
   return (
-    <button
-      id="google-login-btn"
-      type="button"
-      disabled={submitting}
-      onClick={handleFallbackClick}
-      style={{
-        width: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '0.65rem',
-        padding: '0.82rem',
-        borderRadius: '10px',
-        background: '#fff',
-        border: '1.5px solid #e2e8f0',
-        color: '#374151',
-        fontWeight: 700,
-        fontSize: '0.95rem',
-        cursor: submitting ? 'wait' : 'pointer',
-        opacity: submitting ? 0.75 : 1,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-        transition: 'all 0.2s',
-      }}
-    >
-      {submitting ? <Loader2 size={19} className="spin" /> : <GoogleLogo size={20} />}
-      <span>{submitting ? 'Signing in with Google…' : label}</span>
-    </button>
+    <div style={{ width: '100%' }}>
+      <button
+        id="google-login-btn"
+        type="button"
+        disabled={submitting}
+        onClick={handleGoogleSignInClick}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '0.65rem',
+          padding: '0.82rem',
+          borderRadius: '10px',
+          background: '#fff',
+          border: '1.5px solid #e2e8f0',
+          color: '#374151',
+          fontWeight: 700,
+          fontSize: '0.95rem',
+          cursor: submitting ? 'wait' : 'pointer',
+          opacity: submitting ? 0.8 : 1,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          transition: 'all 0.2s',
+        }}
+      >
+        {submitting ? <Loader2 size={19} className="spin" /> : <GoogleLogo size={20} />}
+        <span>{submitting ? 'Signing in with Google…' : label}</span>
+      </button>
+    </div>
   );
 };
 

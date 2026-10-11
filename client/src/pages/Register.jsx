@@ -87,8 +87,6 @@ const Register = () => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [formError, setFormError]     = useState('');
   const [googleError, setGoogleError] = useState('');
-  const [googleReady, setGoogleReady] = useState(false);
-  const googleButtonRef = useRef(null);
   const [success, setSuccess]         = useState(false);
 
   const strength = getStrength(password);
@@ -119,103 +117,6 @@ const Register = () => {
       setFormError(result.message || 'Registration failed. Please try again.');
     }
   };
-
-  const handleGoogleCredential = async (response) => {
-    setGoogleError('');
-    if (!response?.credential) {
-      setGoogleError('Google did not return a sign-in credential. Please try again.');
-      return;
-    }
-
-    const payload = decodeJwt(response.credential);
-    const googleProfile = payload ? {
-      name: payload.name || payload.given_name || (payload.email ? payload.email.split('@')[0] : ''),
-      email: payload.email || '',
-      picture: payload.picture || '',
-    } : {};
-
-    const result = await loginWithGoogle(response.credential, { ...googleProfile, role });
-    if (result.success && result.user?.role !== role) {
-      await logout();
-      setGoogleError(`This Google account is not registered as a ${role === 'user' ? 'participant' : 'organizer'}.`);
-    } else if (result.success) navigate(role === 'organizer' ? '/organizer' : '/dashboard');
-    else setGoogleError(result.message || 'Google sign-up failed.');
-  };
-
-  const handleGoogleRegister = async () => {
-    setGoogleError('');
-    if (GOOGLE_CONFIGURED && window.google?.accounts?.id) {
-      window.google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleGoogleCredential,
-      });
-      window.google.accounts.id.prompt((notification) => {
-        if (notification?.isNotDisplayed?.() || notification?.isSkippedMoment?.()) {
-          console.warn('[Google Auth] Prompt not displayed:', notification.getNotDisplayedReason?.() || notification.getSkippedReason?.());
-        }
-      });
-      return;
-    }
-
-    // Dev / Demo Google Sign-Up Fallback
-    const result = await loginWithGoogle('demo_google_credential', {
-      name: name.trim() || 'Athlete',
-      email: email.trim() || 'athlete@fitnessadventure.com',
-      role,
-    });
-    if (result.success) {
-      navigate(role === 'organizer' ? '/organizer' : '/dashboard');
-    } else {
-      setGoogleError(result.message || 'Google sign-up failed.');
-    }
-  };
-
-  // Load Google script
-  useEffect(() => {
-    if (!GOOGLE_CONFIGURED) return;
-    if (window.google?.accounts?.id) {
-      setGoogleReady(true);
-      return;
-    }
-    const id = 'google-oauth-script';
-    let s = document.getElementById(id);
-    const isNew = !s;
-    if (!s) {
-      s = document.createElement('script');
-      s.id = id;
-      s.src = 'https://accounts.google.com/gsi/client';
-      s.async = true;
-      s.defer = true;
-    }
-    const onLoad = () => {
-      if (window.google?.accounts?.id) setGoogleReady(true);
-    };
-    s.addEventListener('load', onLoad);
-    if (isNew) document.body.appendChild(s);
-    return () => s.removeEventListener('load', onLoad);
-  }, []);
-
-  // Render Google button
-  useEffect(() => {
-    if (!googleReady || !googleButtonRef.current || !window.google?.accounts?.id || role !== 'user') return;
-    window.google.accounts.id.initialize({
-      client_id: GOOGLE_CLIENT_ID,
-      callback: handleGoogleCredential,
-    });
-    const measuredWidth = googleButtonRef.current ? Math.floor(googleButtonRef.current.getBoundingClientRect().width) : 340;
-    const btnWidth = Math.min(380, Math.max(220, measuredWidth || 340));
-    window.google.accounts.id.renderButton(googleButtonRef.current, {
-      type: 'standard',
-      theme: 'outline',
-      size: 'large',
-      text: 'continue_with',
-      shape: 'rectangular',
-      width: btnWidth,
-    });
-    return () => {
-      if (googleButtonRef.current) googleButtonRef.current.replaceChildren();
-    };
-  }, [googleReady, role]);
 
   const displayError = formError || googleError || authError;
 

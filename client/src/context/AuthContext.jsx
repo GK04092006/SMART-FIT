@@ -96,12 +96,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   // ── Google OAuth Login ──────────────────────────────────────────────────────
-  const loginWithGoogle = async (credential, extra = {}) => {
+  const loginWithGoogle = useCallback(async (credential, extra = {}) => {
     setLoading(true);
     setError(null);
     try {
       const { data } = await API.post('/auth/google', { credential, ...extra });
-      const finalUser = await _applyAuthData(data);
+      const finalUser = await _applyAuthData(data, extra.role);
       setLoading(false);
       return { success: true, user: finalUser };
     } catch (err) {
@@ -110,7 +110,89 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
       return { success: false, message: msg };
     }
-  };
+  }, [_applyAuthData]);
+
+  // Handle full-page Google OAuth 2.0 redirect callback (#access_token / #id_token on root URL)
+  useEffect(() => {
+    if (window.opener && window.opener !== window) return;
+    const rawHash = window.location.hash || '';
+    if (!rawHash.includes('access_token=') && !rawHash.includes('id_token=')) return;
+
+    const params = new URLSearchParams(rawHash.replace(/^#/, ''));
+    const accessToken = params.get('access_token') || '';
+    const idToken = params.get('id_token') || '';
+    if (!accessToken && !idToken) return;
+
+    let roleHint = 'user';
+    const stateStr = params.get('state') || '';
+    if (stateStr) {
+      try {
+        const parsedState = JSON.parse(atob(stateStr));
+        if (parsedState?.role) roleHint = parsedState.role;
+      } catch {}
+    }
+
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    try {
+      localStorage.removeItem('smartfit_google_oauth_hash');
+    } catch {}
+
+    (async () => {
+      let profile = {};
+      if (idToken) {
+        try {
+          const base64Url = idToken.split('.')[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const decoded = JSON.parse(
+            decodeURIComponent(
+              atob(base64)
+                .split('')
+                .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                .join('')
+            )
+          );
+          profile = {
+            email: decoded.email || '',
+            name: decoded.name || decoded.given_name || '',
+            picture: decoded.picture || '',
+            googleId: decoded.sub || '',
+          };
+        } catch {}
+      }
+      if ((!profile.email || !profile.name) && accessToken) {
+        try {
+          const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          if (res.ok) {
+            const info = await res.json();
+            profile = {
+              email: info.email || profile.email || '',
+              name: info.name || info.given_name || profile.name || '',
+              picture: info.picture || profile.picture || '',
+              googleId: info.sub || profile.googleId || '',
+            };
+          }
+        } catch {}
+      }
+
+      const result = await loginWithGoogle(idToken || accessToken, {
+        ...profile,
+        idToken,
+        accessToken,
+        role: roleHint,
+      });
+      if (result?.success) {
+        const target =
+          result.user?.role === 'admin'
+            ? '/admin'
+            : result.user?.role === 'organizer'
+            ? '/organizer'
+            : '/dashboard';
+        window.location.replace(target);
+      }
+    })();
+  }, [loginWithGoogle]);
 
   // ── Phone OTP Login ─────────────────────────────────────────────────────────
   const loginWithPhone = async (phone, otp) => {
