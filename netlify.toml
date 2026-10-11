@@ -1,50 +1,29 @@
 [build]
+  base = "."
   command = "npm install && npm install --prefix server && npm install --include=dev --prefix client && npm run build --prefix client"
   publish = "client/dist"
   functions = "netlify/functions"
 
 [build.environment]
   NODE_VERSION = "20"
+  NPM_FLAGS = "--legacy-peer-deps"
   ALLOW_DB_FALLBACK = "true"
-  VITE_GOOGLE_CLIENT_ID = "272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com"
+  MONGO_URI = "mongodb+srv://24104011_db_user:karthik%40123@cluster0.62gkyix.mongodb.net/fitness_adventure_admin?retryWrites=true&w=majority&appName=Cluster0"
+  MONGO_DB_NAME = "fitness_adventure_admin"
   GOOGLE_CLIENT_ID = "272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com"
-  MONGO_DB_NAME = "fitness_adventure_db"
-  JWT_SECRET = "fitness_adventure_super_secret_key_2026"
-
-[context.production.environment]
   VITE_GOOGLE_CLIENT_ID = "272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com"
-  GOOGLE_CLIENT_ID = "272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com"
-  ALLOW_DB_FALLBACK = "true"
-
-[context.deploy-preview.environment]
-  VITE_GOOGLE_CLIENT_ID = "272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com"
-  GOOGLE_CLIENT_ID = "272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com"
-  ALLOW_DB_FALLBACK = "true"
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = [
-    "express",
-    "mongoose",
-    "bcryptjs",
-    "cors",
-    "dotenv",
-    "google-auth-library",
-    "jsonwebtoken",
-    "multer",
-    "nodemailer",
-    "serverless-http"
-  ]
+  external_node_modules = ["express", "mongoose", "bcryptjs", "jsonwebtoken", "cors", "dotenv", "multer", "nodemailer", "serverless-http", "google-auth-library"]
   included_files = ["server/**"]
 
-# Route API requests to Netlify Serverless Express Backend
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api/:splat"
   status = 200
   force = true
 
-# SPA Fallback for React Router
 [[redirects]]
   from = "/*"
   to = "/index.html"

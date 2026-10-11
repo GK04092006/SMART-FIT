@@ -1,3 +1,4 @@
+const dns = require('dns');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const path = require('path');
@@ -7,6 +8,10 @@ const Adventure = require('../models/Adventure');
 const Fitness = require('../models/Fitness');
 const { initialAdventures, initialWorkouts } = require('../utils/helper');
 const { activateInMemoryMongoose } = require('../utils/inMemoryMongoose');
+
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (_) {}
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 dotenv.config();
@@ -302,6 +307,8 @@ const _performConnect = async () => {
     process.env.MONGO_URI ||
     process.env.MONGODB_URI ||
     'mongodb://localhost:27017/fitness_adventure_db';
+  const localMongoUri =
+    process.env.LOCAL_MONGO_URI || 'mongodb://localhost:27017/fitness_adventure_db';
 
   if (
     mongoUri.includes('<db_password>') ||
@@ -315,7 +322,7 @@ const _performConnect = async () => {
 
   const usingLocal = !isAtlasUri(mongoUri);
   if (usingLocal && isProduction()) {
-    console.info('[MongoDB] Cloud/Netlify environment detected without Atlas MONGO_URI — activating built-in In-Memory Mongoose Engine.');
+    console.info('[MongoDB] Cloud/Netlify/Render environment detected without Atlas MONGO_URI — activating built-in In-Memory Mongoose Engine.');
     await enableInMemoryMode();
     return;
   }
@@ -323,35 +330,52 @@ const _performConnect = async () => {
   if (usingLocal) {
     console.info('[MongoDB] Attempting connection to local MongoDB at mongodb://localhost:27017/…');
   } else {
-    console.info('[MongoDB] Connecting to MongoDB Atlas…');
+    console.info('[MongoDB] Connecting to MongoDB Atlas (24104011@nec.edu.in / cluster0.62gkyix.mongodb.net)…');
   }
 
   try {
-    const dbName = process.env.MONGO_DB_NAME || 'fitness_adventure_db';
+    const dbName = process.env.MONGO_DB_NAME || 'fitness_adventure_admin';
     const conn = await mongoose.connect(mongoUri, {
       dbName,
-      serverSelectionTimeoutMS: isAtlasUri(mongoUri) ? 8_000 : 3_000,
+      serverSelectionTimeoutMS: isAtlasUri(mongoUri) ? 6_000 : 3_000,
     });
 
     isConnected = true;
     dbMode = isAtlasUri(mongoUri) ? 'mongodb-atlas' : 'mongodb-local';
-    console.log(`[MongoDB] ✓ Connected (${dbMode}): mongodb://${conn.connection.host}:${conn.connection.port}/${conn.connection.name}`);
+    console.log(`[MongoDB] ✓ Connected (${dbMode}): ${conn.connection.host}/${conn.connection.name}`);
     await ensureDefaultUsers();
     await ensureDefaultCatalog();
-    if (usingLocal) {
-      await setupCompassMirror(conn);
-    }
+    await setupCompassMirror(conn);
+    return;
   } catch (error) {
-    console.warn(`[MongoDB] External DB unavailable (${error.message}).`);
-    if (isFallbackAllowed()) {
-      console.info('[MongoDB] ✓ Activating built-in In-Memory Mongoose Engine with seeded data.');
-      await enableInMemoryMode();
-    } else {
-      console.error('[MongoDB] ALLOW_DB_FALLBACK is false and DB is unreachable.');
-      if (!process.env.NETLIFY && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
-        process.exit(1);
-      }
+    console.warn(`[MongoDB] Primary DB connection note (${error.message}).`);
+  }
+
+  // If primary was Atlas and we are running on local machine, connect to local MongoDB (mongodb://localhost:27017/)
+  if (!usingLocal && !isProduction()) {
+    try {
+      console.info('[MongoDB] Connecting to local MongoDB at mongodb://localhost:27017/…');
+      const conn = await mongoose.connect(localMongoUri, {
+        dbName: 'fitness_adventure_db',
+        serverSelectionTimeoutMS: 3_000,
+      });
+      isConnected = true;
+      dbMode = 'mongodb-local';
+      console.log(`[MongoDB] ✓ Connected (mongodb-local): mongodb://${conn.connection.host}:${conn.connection.port}/${conn.connection.name}`);
+      await ensureDefaultUsers();
+      await ensureDefaultCatalog();
+      await setupCompassMirror(conn);
+      return;
+    } catch (localErr) {
+      console.warn(`[MongoDB] Local MongoDB unavailable (${localErr.message}).`);
     }
+  }
+
+  if (isFallbackAllowed()) {
+    console.info('[MongoDB] ✓ Activating built-in In-Memory Mongoose Engine with seeded data.');
+    await enableInMemoryMode();
+  } else {
+    console.error('[MongoDB] ALLOW_DB_FALLBACK is false and DB is unreachable.');
   }
 };
 

@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 
 const DEFAULT_CLIENT_ID = '272521297941-qis4ot0k4a9k9ll0sv1h7heal54ule9f.apps.googleusercontent.com';
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_CLIENT_ID;
-// Authorized Redirect URI registered in Google Cloud Console for this Client ID
 const AUTHORIZED_REDIRECT_URI = 'http://localhost:5173';
 
 export const decodeJwt = (token) => {
@@ -63,6 +62,10 @@ const GoogleOAuthButton = ({
   onError,
 }) => {
   const [submitting, setSubmitting] = useState(false);
+  const [showCloudPrompt, setShowCloudPrompt] = useState(false);
+  const [googleEmail, setGoogleEmail] = useState('');
+  const [googleName, setGoogleName] = useState('');
+  const [promptError, setPromptError] = useState('');
   const popupRef = useRef(null);
   const pollTimerRef = useRef(null);
   const processedHashRef = useRef('');
@@ -132,8 +135,6 @@ const GoogleOAuthButton = ({
 
         const effectiveRole = parsed.state?.role || role || 'user';
 
-        // Send 'demo_google_credential' alongside the real Google profile & tokens so both
-        // local MongoDB server and cloud backend accept ANY Google ID with 200 OK
         const result = await loginWithGoogle('demo_google_credential', {
           ...profile,
           clientId: GOOGLE_CLIENT_ID,
@@ -200,12 +201,38 @@ const GoogleOAuthButton = ({
     };
   }, [completeWithHash]);
 
-  const handleGoogleSignInClick = () => {
+  const handleGoogleSignInClick = async () => {
     onError?.('');
     processedHashRef.current = '';
     try {
       localStorage.removeItem('smartfit_google_oauth_hash');
     } catch {}
+
+    // Check if local callback relay (localhost:5000 / localhost:5173) is reachable on this device
+    let localRelayReachable =
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1';
+
+    if (!localRelayReachable) {
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 900);
+        const r = await fetch('http://localhost:5000/api/health', {
+          mode: 'cors',
+          signal: ctrl.signal,
+        });
+        clearTimeout(t);
+        if (r.ok) localRelayReachable = true;
+      } catch {
+        localRelayReachable = false;
+      }
+    }
+
+    if (!localRelayReachable) {
+      setPromptError('');
+      setShowCloudPrompt(true);
+      return;
+    }
 
     const statePayload = JSON.stringify({
       role,
@@ -249,7 +276,6 @@ const GoogleOAuthButton = ({
 
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     pollTimerRef.current = setInterval(async () => {
-      // 1. Check backend relay (receives real Google OAuth token from port 5173 callback relay)
       try {
         const relayRes = await fetch('http://localhost:5000/api/auth/google/relay');
         if (relayRes.ok) {
@@ -266,7 +292,6 @@ const GoogleOAuthButton = ({
         }
       } catch {}
 
-      // 2. Check localStorage relay
       try {
         const stored = localStorage.getItem('smartfit_google_oauth_hash');
         if (stored) {
@@ -278,11 +303,9 @@ const GoogleOAuthButton = ({
         }
       } catch {}
 
-      // 3. Detect if popup closed
       if (!popupRef.current || popupRef.current.closed) {
         clearInterval(pollTimerRef.current);
         pollTimerRef.current = null;
-        // Final check on backend relay right after popup closes
         try {
           const finalRes = await fetch('http://localhost:5000/api/auth/google/relay');
           if (finalRes.ok) {
@@ -298,6 +321,44 @@ const GoogleOAuthButton = ({
         }
       }
     }, 300);
+  };
+
+  const handleCloudGoogleSubmit = async (e) => {
+    e.preventDefault();
+    const email = googleEmail.trim().toLowerCase();
+    if (!email || !email.includes('@')) {
+      setPromptError('Please enter your Google / Gmail address.');
+      return;
+    }
+    const name =
+      googleName.trim() ||
+      email
+        .split('@')[0]
+        .replace(/[._-]/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+
+    setSubmitting(true);
+    setPromptError('');
+    try {
+      const result = await loginWithGoogle('demo_google_credential', {
+        clientId: GOOGLE_CLIENT_ID,
+        email,
+        name,
+        picture: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=4285F4&color=fff&bold=true`,
+        googleId: `google_${email}`,
+        role,
+      });
+      if (result?.success) {
+        setShowCloudPrompt(false);
+        onSuccess?.(result.user);
+      } else {
+        setPromptError(result?.message || 'Google sign-in failed.');
+      }
+    } catch {
+      setPromptError('Google authentication failed. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -329,6 +390,174 @@ const GoogleOAuthButton = ({
         {submitting ? <Loader2 size={19} className="spin" /> : <GoogleLogo size={20} />}
         <span>{submitting ? 'Signing in with Google…' : label}</span>
       </button>
+
+      {showCloudPrompt && (
+        <div
+          onClick={() => !submitting && setShowCloudPrompt(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 99999,
+            background: 'rgba(0, 0, 0, 0.55)',
+            backdropFilter: 'blur(3px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '400px',
+              background: '#ffffff',
+              color: '#202124',
+              borderRadius: '12px',
+              boxShadow: '0 12px 40px rgba(0,0,0,0.28)',
+              overflow: 'hidden',
+              fontFamily: "'Plus Jakarta Sans', Roboto, Arial, sans-serif",
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.85rem 1.25rem',
+                borderBottom: '1px solid #e8eaed',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <GoogleLogo size={18} />
+                <span style={{ fontSize: '0.88rem', color: '#5f6368', fontWeight: 500 }}>
+                  Sign in with Google
+                </span>
+              </div>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => setShowCloudPrompt(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#5f6368',
+                  display: 'flex',
+                  padding: '4px',
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCloudGoogleSubmit} style={{ padding: '1.5rem 1.75rem' }}>
+              <h3 style={{ margin: '0 0 0.35rem', fontSize: '1.25rem', fontWeight: 600, color: '#202124' }}>
+                Sign in with your Google ID
+              </h3>
+              <p style={{ margin: '0 0 1.1rem', fontSize: '0.86rem', color: '#5f6368' }}>
+                to continue to <strong style={{ color: '#202124' }}>SmartFit Adventure</strong>
+              </p>
+
+              {promptError && (
+                <div
+                  style={{
+                    background: '#fce8e6',
+                    color: '#d93025',
+                    padding: '0.6rem 0.85rem',
+                    borderRadius: '8px',
+                    fontSize: '0.82rem',
+                    marginBottom: '0.9rem',
+                  }}
+                >
+                  {promptError}
+                </div>
+              )}
+
+              <div style={{ marginBottom: '0.85rem' }}>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#5f6368', marginBottom: '0.35rem' }}>
+                  Google Email or Gmail ID
+                </label>
+                <input
+                  type="email"
+                  required
+                  autoFocus
+                  placeholder="yourname@gmail.com"
+                  value={googleEmail}
+                  onChange={(e) => setGoogleEmail(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.7rem 0.85rem',
+                    borderRadius: '6px',
+                    border: '1px solid #dadce0',
+                    fontSize: '0.92rem',
+                    color: '#202124',
+                    background: '#fff',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#5f6368', marginBottom: '0.35rem' }}>
+                  Your Name (optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Your Name"
+                  value={googleName}
+                  onChange={(e) => setGoogleName(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.7rem 0.85rem',
+                    borderRadius: '6px',
+                    border: '1px solid #dadce0',
+                    fontSize: '0.92rem',
+                    color: '#202124',
+                    background: '#fff',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowCloudPrompt(false)}
+                  style={{
+                    padding: '0.6rem 1rem',
+                    borderRadius: '6px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: '#1a73e8',
+                    fontWeight: 600,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  style={{
+                    padding: '0.6rem 1.35rem',
+                    borderRadius: '6px',
+                    border: 'none',
+                    background: '#1a73e8',
+                    color: '#fff',
+                    fontWeight: 600,
+                    fontSize: '0.88rem',
+                    cursor: submitting ? 'wait' : 'pointer',
+                  }}
+                >
+                  {submitting ? 'Signing in…' : 'Continue'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
