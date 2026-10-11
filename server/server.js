@@ -38,7 +38,11 @@ initCSVStore();
 
 const app = express();
 
-// Middleware
+// Middleware — allow Netlify/Vercel HTTPS sites to connect to local backend (mongodb://localhost:27017/)
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Private-Network', 'true');
+  next();
+});
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));

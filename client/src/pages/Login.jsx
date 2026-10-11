@@ -778,7 +778,7 @@ const Login = ({ expectedRole = 'user' }) => {
             {googleError && <ErrorBanner message={googleError} />}
             <GoogleOAuthButton
               role={expectedRole}
-              label={`Continue with Google (${roleLabel})`}
+              label="Continue with Google"
               loginWithGoogle={loginWithGoogle}
               onSuccess={handleSuccess}
               onError={setGoogleError}

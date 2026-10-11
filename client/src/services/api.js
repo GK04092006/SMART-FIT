@@ -1,10 +1,9 @@
 import axios from 'axios';
 
+const LOCAL_BACKEND_API = 'http://localhost:5000/api';
 const FALLBACK_BACKEND_API = 'https://smart-fit-yykj.onrender.com/api';
 
-// By default use relative '/api' so Netlify Functions (/.netlify/functions/api),
-// Vercel rewrites, Render same-origin, and Vite dev proxy all work seamlessly.
-// If VITE_API_URL is explicitly set, route directly to that backend URL.
+// If VITE_API_URL is set, use it; otherwise use relative '/api'
 const rawBase = import.meta.env.VITE_API_URL || '';
 const baseURL = rawBase
   ? (rawBase.endsWith('/api') ? rawBase : `${rawBase.replace(/\/$/, '')}/api`)
@@ -16,6 +15,27 @@ const API = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// Probe if local backend (connected to mongodb://localhost:27017/) is running on this machine
+// If running, route deployed Netlify/Vercel frontend directly to http://localhost:5000/api so data saves in local MongoDB Compass!
+if (
+  typeof window !== 'undefined' &&
+  window.location.hostname !== 'localhost' &&
+  window.location.hostname !== '127.0.0.1' &&
+  !import.meta.env.VITE_API_URL
+) {
+  fetch(`${LOCAL_BACKEND_API}/health`, { method: 'GET', mode: 'cors' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data) => {
+      if (data && data.status === 'OK') {
+        API.defaults.baseURL = LOCAL_BACKEND_API;
+        console.info('[SmartFit API] Connected to local backend (mongodb://localhost:27017/)');
+      }
+    })
+    .catch(() => {
+      // Local backend not running on this device — keep using Netlify Function (/api)
+    });
+}
 
 // Request interceptor — attach JWT token from localStorage
 API.interceptors.request.use(
@@ -32,7 +52,6 @@ API.interceptors.request.use(
 // Response interceptor — fallback to Render backend if static-only deployed, and auto-logout on 401
 API.interceptors.response.use(
   (response) => {
-    // If a static host returned index.html (string) instead of JSON for an /api route, retry on fallback backend
     if (
       typeof response.data === 'string' &&
       response.data.trim().startsWith('<!doctype html') &&
@@ -47,7 +66,6 @@ API.interceptors.response.use(
   },
   async (error) => {
     const config = error.config;
-    // Automatic fallback if Netlify Function is unreachable (e.g. manual drag-and-drop of dist only)
     if (
       config &&
       !config._retriedFallback &&

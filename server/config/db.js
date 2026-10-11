@@ -228,11 +228,63 @@ const enableInMemoryMode = async () => {
   await ensureDefaultCatalog();
 };
 
+let mirrorDb = null;
+
+const setupCompassMirror = async (conn) => {
+  try {
+    const primaryName = conn.connection.name;
+    const secondaryName =
+      primaryName === 'fitness_adventure_db'
+        ? 'fitness_adventure_admin'
+        : 'fitness_adventure_db';
+
+    mirrorDb = conn.connection.useDb(secondaryName, { useCache: true });
+
+    // Initial one-way sync of all collections from primary to secondary so Compass shows identical data in both
+    const collections = await conn.connection.db.listCollections().toArray();
+    for (const { name } of collections) {
+      const docs = await conn.connection.db.collection(name).find({}).toArray();
+      if (docs.length > 0) {
+        const bulkOps = docs.map((doc) => ({
+          replaceOne: {
+            filter: { _id: doc._id },
+            replacement: doc,
+            upsert: true,
+          },
+        }));
+        await mirrorDb.collection(name).bulkWrite(bulkOps, { ordered: false }).catch(() => {});
+      }
+    }
+
+    // Attach global Mongoose plugin so any new/updated User, Booking, Workout, etc. writes to both Compass DBs
+    mongoose.plugin((schema) => {
+      schema.post('save', function (doc) {
+        if (!mirrorDb || !doc || !this.collection?.name) return;
+        const raw = doc.toObject ? doc.toObject() : doc;
+        mirrorDb
+          .collection(this.collection.name)
+          .replaceOne({ _id: raw._id }, raw, { upsert: true })
+          .catch(() => {});
+      });
+      schema.post('findOneAndUpdate', function (doc) {
+        if (!mirrorDb || !doc || !this.mongooseCollection?.name) return;
+        const raw = doc.toObject ? doc.toObject() : doc;
+        mirrorDb
+          .collection(this.mongooseCollection.name)
+          .replaceOne({ _id: raw._id }, raw, { upsert: true })
+          .catch(() => {});
+      });
+    });
+  } catch (err) {
+    console.warn('[MongoDB Mirror] Optional sync skipped:', err.message);
+  }
+};
+
 const _performConnect = async () => {
   const mongoUri =
     process.env.MONGO_URI ||
     process.env.MONGODB_URI ||
-    'mongodb://127.0.0.1:27017/fitness_adventure_db';
+    'mongodb://localhost:27017/fitness_adventure_db';
 
   if (
     mongoUri.includes('<db_password>') ||
@@ -252,7 +304,7 @@ const _performConnect = async () => {
   }
 
   if (usingLocal) {
-    console.info('[MongoDB] Attempting connection to local MongoDB at 127.0.0.1:27017…');
+    console.info('[MongoDB] Attempting connection to local MongoDB at mongodb://localhost:27017/…');
   } else {
     console.info('[MongoDB] Connecting to MongoDB Atlas…');
   }
@@ -266,9 +318,12 @@ const _performConnect = async () => {
 
     isConnected = true;
     dbMode = isAtlasUri(mongoUri) ? 'mongodb-atlas' : 'mongodb-local';
-    console.log(`[MongoDB] ✓ Connected (${dbMode}): ${conn.connection.host}/${conn.connection.name}`);
+    console.log(`[MongoDB] ✓ Connected (${dbMode}): mongodb://${conn.connection.host}:${conn.connection.port}/${conn.connection.name}`);
     await ensureDefaultUsers();
     await ensureDefaultCatalog();
+    if (usingLocal) {
+      await setupCompassMirror(conn);
+    }
   } catch (error) {
     console.warn(`[MongoDB] External DB unavailable (${error.message}).`);
     if (isFallbackAllowed()) {
@@ -301,6 +356,7 @@ const getDBStatus = () => isConnected || mongoose.connection.readyState === 1;
 const getDBInfo = () => ({
   connected: getDBStatus(),
   mode: dbMode,
+  uri: dbMode === 'mongodb-local' ? 'mongodb://localhost:27017/' : undefined,
   dbName: mongoose.connection?.name || process.env.MONGO_DB_NAME || 'fitness_adventure_db',
 });
 

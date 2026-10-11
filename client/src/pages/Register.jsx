@@ -503,7 +503,7 @@ const Register = () => {
                 )}
                 <GoogleOAuthButton
                   role={role}
-                  label={`Sign up with Google (${role === 'organizer' ? 'Organizer' : 'Participant'})`}
+                  label="Continue with Google"
                   loginWithGoogle={loginWithGoogle}
                   onSuccess={(u) => navigate(u?.role === 'organizer' ? '/organizer' : '/dashboard')}
                   onError={setGoogleError}

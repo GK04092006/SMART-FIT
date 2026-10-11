@@ -93,7 +93,7 @@ const AdminLogin = () => {
         <div style={{ marginTop: '1.25rem' }}>
           <GoogleOAuthButton
             role="admin"
-            label="Continue with Google (Admin)"
+            label="Continue with Google"
             loginWithGoogle={loginWithGoogle}
             onSuccess={() => navigate('/analytics')}
             onError={setFormError}
